@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GMap v3 — Algorithm Visualizer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --blue:#1967d2;--blue-lt:#e8f0fe;--blue-glow:rgba(25,103,210,.3);
+  --green:#1e8e3e;--green-lt:#e6f4ea;
+  --red:#c5221f;--red-lt:#fce8e6;
+  --orange:#e37400;--orange-lt:#fef3e2;
+  --gray-0:#fff;--gray-50:#f8f9fa;--gray-100:#f1f3f4;
+  --gray-200:#e8eaed;--gray-300:#dadce0;--gray-500:#9aa0a6;
+  --gray-700:#5f6368;--gray-900:#202124;--text:#3c4043;
+  --panel:400px;
+  --font:'DM Sans',sans-serif;--mono:'DM Mono',monospace;
+  --shadow:0 2px 8px rgba(0,0,0,.14),0 1px 3px rgba(0,0,0,.1);
+  --shadow-lg:0 8px 32px rgba(0,0,0,.16),0 2px 8px rgba(0,0,0,.08);
+  --r:10px;--ease:cubic-bezier(.4,0,.2,1);
+}
+html,body{height:100%;overflow:hidden;font-family:var(--font);background:#e8edf2}
+.app{display:flex;height:100vh}
+
+/* ══ SIDEBAR ══════════════════════════════════════════════ */
+.sidebar{
+  width:var(--panel);height:100%;
+  background:#fff;display:flex;flex-direction:column;
+  box-shadow:var(--shadow-lg);z-index:1000;flex-shrink:0;
+  overflow:hidden;
+}
+
+/* Header */
+.s-head{padding:16px 16px 0;flex-shrink:0}
+.logo-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.logo-mark{
+  width:42px;height:42px;border-radius:12px;
+  background:linear-gradient(135deg,#4285f4,#1967d2);
+  display:flex;align-items:center;justify-content:center;
+  font-size:22px;box-shadow:0 4px 12px var(--blue-glow);flex-shrink:0;
+}
+.logo-name{font-size:22px;font-weight:700;letter-spacing:-.5px;color:var(--gray-900)}
+.logo-name em{color:var(--blue);font-style:normal}
+.logo-ver{
+  margin-left:auto;font-size:11px;font-weight:600;
+  background:var(--blue-lt);color:var(--blue);
+  padding:3px 8px;border-radius:20px;font-family:var(--mono);
+}
+.s-spinner{
+  display:none;width:18px;height:18px;margin-left:8px;
+  border:2.5px solid var(--gray-200);border-top-color:var(--blue);
+  border-radius:50%;animation:spin .5s linear infinite;
+}
+.s-spinner.show{display:block}
+
+/* Search */
+.search-wrap{
+  display:flex;align-items:center;gap:10px;
+  height:46px;padding:0 14px;
+  background:var(--gray-100);border-radius:23px;
+  border:1.5px solid transparent;transition:all .2s var(--ease);
+}
+.search-wrap:focus-within{
+  background:#fff;border-color:var(--blue);
+  box-shadow:0 2px 12px var(--blue-glow);
+}
+.search-wrap input{
+  flex:1;border:none;background:transparent;
+  font-size:14px;color:var(--gray-900);outline:none;font-family:var(--font);
+}
+.search-wrap input::placeholder{color:var(--gray-500)}
+.s-ico{font-size:17px;color:var(--gray-500)}
+
+/* Tabs */
+.tabs{display:flex;margin-top:12px;border-bottom:1.5px solid var(--gray-200)}
+.tab{
+  flex:1;padding:11px 6px;font-size:12px;font-weight:600;
+  letter-spacing:.3px;color:var(--gray-700);text-align:center;
+  cursor:pointer;border-bottom:3px solid transparent;
+  transition:all .18s var(--ease);user-select:none;
+}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue)}
+.tab:hover:not(.active){background:var(--gray-50)}
+
+/* Body */
+.s-body{flex:1;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--gray-300) transparent}
+.s-body::-webkit-scrollbar{width:4px}
+.s-body::-webkit-scrollbar-thumb{background:var(--gray-300);border-radius:4px}
+.panel{display:none}.panel.active{display:block}
+
+/* ══ ALGORITHM TOGGLE ══════════════════════════════════════ */
+.algo-section{padding:14px 14px 10px}
+.algo-label{font-size:11px;font-weight:600;color:var(--gray-500);letter-spacing:.8px;margin-bottom:8px}
+.algo-toggle{
+  display:grid;grid-template-columns:1fr 1fr 1fr;
+  gap:4px;background:var(--gray-100);
+  border-radius:12px;padding:4px;
+}
+.algo-btn{
+  padding:9px 6px;border:none;border-radius:9px;
+  font-size:11px;font-weight:600;font-family:var(--font);
+  cursor:pointer;transition:all .18s var(--ease);
+  color:var(--gray-700);background:transparent;
+  letter-spacing:.2px;line-height:1.3;text-align:center;
+}
+.algo-btn.active{
+  background:#fff;color:var(--blue);
+  box-shadow:0 1px 4px rgba(0,0,0,.15);
+}
+.algo-btn:hover:not(.active){background:rgba(255,255,255,.6);color:var(--gray-900)}
+
+/* Algo info box */
+.algo-info{
+  margin:0 14px 12px;padding:11px 13px;
+  border-radius:var(--r);border-left:3px solid var(--blue);
+  background:var(--blue-lt);font-size:12px;
+  color:var(--gray-700);line-height:1.55;
+  transition:all .2s var(--ease);
+}
+.algo-info.green{border-color:var(--green);background:var(--green-lt)}
+.algo-info.orange{border-color:var(--orange);background:var(--orange-lt)}
+.algo-info strong{color:var(--gray-900);font-weight:600}
+
+/* ══ FIELDS ════════════════════════════════════════════════ */
+.field-group{padding:6px 14px 10px;display:flex;flex-direction:column;gap:10px}
+.field-wrap{
+  display:flex;align-items:center;gap:10px;
+  background:var(--gray-100);border-radius:12px;
+  padding:11px 13px;border:1.5px solid transparent;
+  transition:all .18s var(--ease);position:relative;cursor:text;
+}
+.field-wrap:focus-within{
+  background:#fff;border-color:var(--blue);
+  box-shadow:0 2px 8px var(--blue-glow);
+}
+.badge{
+  width:26px;height:26px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;
+  font-size:12px;font-weight:700;flex-shrink:0;color:#fff;
+}
+.badge-a{background:var(--green)}.badge-b{background:var(--red)}
+.field-wrap input{
+  flex:1;border:none;background:transparent;
+  font-size:14px;color:var(--gray-900);outline:none;font-family:var(--font);
+}
+.field-wrap input::placeholder{color:var(--gray-500)}
+.swap-row{display:flex;justify-content:flex-end;padding:0 14px;margin-top:-4px}
+.swap-btn{
+  width:30px;height:30px;border-radius:50%;
+  border:1.5px solid var(--gray-300);background:#fff;
+  cursor:pointer;font-size:16px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .18s var(--ease);color:var(--gray-700);
+}
+.swap-btn:hover{border-color:var(--blue);color:var(--blue);background:var(--blue-lt)}
+
+/* Autocomplete */
+.ac-list{
+  position:absolute;top:calc(100% + 6px);left:0;right:0;
+  background:#fff;border-radius:var(--r);box-shadow:var(--shadow-lg);
+  z-index:9999;max-height:200px;overflow-y:auto;display:none;
+}
+.ac-list.open{display:block}
+.ac-item{
+  padding:10px 13px;font-size:13px;color:var(--text);
+  cursor:pointer;display:flex;align-items:center;gap:10px;
+  transition:background .1s;
+}
+.ac-item:hover{background:var(--gray-100)}
+.ac-item .ac-pin{font-size:14px}
+
+/* Primary button */
+.primary-btn{
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  margin:0 14px 14px;padding:13px;
+  border:none;border-radius:24px;
+  background:var(--blue);color:#fff;
+  font-size:13px;font-weight:600;font-family:var(--font);
+  cursor:pointer;letter-spacing:.3px;
+  box-shadow:0 2px 10px var(--blue-glow);
+  transition:all .18s var(--ease);
+}
+.primary-btn:hover{background:#1557b0;box-shadow:0 4px 16px var(--blue-glow)}
+.primary-btn:active{transform:scale(.98)}
+.primary-btn.green-btn{background:var(--green);box-shadow:0 2px 10px rgba(30,142,62,.3)}
+.primary-btn.green-btn:hover{background:#1a7a36}
+
+/* Error */
+.err{color:var(--red);font-size:12px;padding:0 14px 10px;display:none}
+.err.show{display:block}
+
+/* ══ STATS PANEL ═══════════════════════════════════════════ */
+.stats-card{
+  margin:0 14px 14px;border-radius:var(--r);overflow:hidden;
+  display:none;box-shadow:0 1px 6px rgba(0,0,0,.1);
+}
+.stats-card.show{display:block;animation:fadeUp .25s var(--ease)}
+
+.stats-header{
+  padding:12px 14px;color:#fff;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.stats-header.blue-hdr{background:var(--blue)}
+.stats-header.green-hdr{background:var(--green)}
+.stats-header.orange-hdr{background:var(--orange)}
+.stats-dist{font-size:24px;font-weight:700;font-family:var(--mono)}
+.stats-route{font-size:11px;opacity:.85;margin-top:2px}
+.stats-algo-name{
+  font-size:11px;font-weight:600;
+  background:rgba(255,255,255,.2);padding:3px 8px;
+  border-radius:20px;letter-spacing:.3px;
+}
+
+/* Metrics row */
+.metrics-row{
+  display:grid;grid-template-columns:1fr 1fr 1fr;
+  background:var(--gray-50);border-bottom:1px solid var(--gray-200);
+}
+.metric{
+  padding:10px 12px;text-align:center;
+  border-right:1px solid var(--gray-200);
+}
+.metric:last-child{border-right:none}
+.metric-val{
+  font-size:20px;font-weight:700;color:var(--gray-900);
+  font-family:var(--mono);
+}
+.metric-val.blue{color:var(--blue)}
+.metric-val.green{color:var(--green)}
+.metric-val.orange{color:var(--orange)}
+.metric-label{font-size:10px;color:var(--gray-500);margin-top:2px;font-weight:500}
+
+/* Route steps */
+.route-body{background:var(--blue-lt);padding:12px 14px}
+.route-body.green-body{background:var(--green-lt)}
+.route-body.orange-body{background:var(--orange-lt)}
+.steps{display:flex;flex-direction:column}
+.step{
+  display:flex;align-items:flex-start;gap:10px;
+  padding:5px 0;position:relative;
+}
+.step:not(:last-child)::after{
+  content:'';position:absolute;left:10px;top:22px;bottom:-3px;
+  width:2px;background:rgba(25,103,210,.2);
+}
+.step-num{
+  width:20px;height:20px;border-radius:50%;
+  background:var(--blue);color:#fff;
+  font-size:10px;font-weight:700;font-family:var(--mono);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;margin-top:1px;
+}
+.step-num.s{background:var(--green)}.step-num.e{background:var(--red)}
+.step-city{font-size:13px;color:var(--gray-900);flex:1}
+.step-km{font-size:11px;color:var(--gray-500);margin-left:auto;white-space:nowrap;font-family:var(--mono)}
+
+/* ══ BENCHMARK CARD ════════════════════════════════════════ */
+.bench-card{
+  margin:0 14px 14px;border-radius:var(--r);overflow:hidden;
+  display:none;box-shadow:0 1px 6px rgba(0,0,0,.1);
+}
+.bench-card.show{display:block;animation:fadeUp .25s var(--ease)}
+.bench-header{
+  background:var(--gray-900);color:#fff;
+  padding:12px 14px;
+  display:flex;align-items:center;justify-content:space-between;
+}
+.bench-title{font-size:13px;font-weight:600}
+.bench-sub{font-size:11px;opacity:.6;margin-top:2px}
+.bench-rows{background:var(--gray-50)}
+.bench-row{
+  display:grid;grid-template-columns:1fr auto auto auto;
+  gap:8px;align-items:center;
+  padding:10px 14px;border-bottom:1px solid var(--gray-200);
+  transition:background .15s;
+}
+.bench-row:last-child{border-bottom:none}
+.bench-row:hover{background:var(--gray-100)}
+.bench-algo{font-size:13px;font-weight:600;color:var(--gray-900)}
+.bench-algo small{font-size:10px;font-weight:400;color:var(--gray-500);display:block}
+.bench-stat{
+  font-size:13px;font-weight:600;font-family:var(--mono);
+  text-align:right;color:var(--gray-700);
+}
+.bench-stat.winner{color:var(--green)}
+.bench-bar-wrap{height:4px;background:var(--gray-200);border-radius:2px;margin-top:4px;overflow:hidden}
+.bench-bar{height:100%;border-radius:2px;transition:width .6s var(--ease)}
+
+.winner-badge{
+  font-size:10px;font-weight:700;padding:2px 6px;
+  border-radius:10px;background:var(--green-lt);color:var(--green);
+}
+
+/* ══ TRIP PANEL ════════════════════════════════════════════ */
+.trip-add-row{
+  display:flex;gap:8px;align-items:center;
+  padding:14px 14px 8px;position:relative;
+}
+.trip-add-row .ac-list{top:calc(100% - 8px)}
+.trip-input{
+  flex:1;padding:10px 14px;border:1.5px solid var(--gray-300);
+  border-radius:24px;font-size:13px;outline:none;font-family:var(--font);
+  transition:all .18s var(--ease);
+}
+.trip-input:focus{border-color:var(--blue);box-shadow:0 2px 8px var(--blue-glow)}
+.add-btn{
+  width:36px;height:36px;border-radius:50%;
+  border:none;background:var(--blue);color:#fff;
+  cursor:pointer;font-size:22px;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 2px 6px var(--blue-glow);transition:all .18s var(--ease);
+}
+.add-btn:hover{background:#1557b0}
+.trip-list{padding:0 14px 10px;display:flex;flex-direction:column;gap:7px}
+.trip-item{
+  display:flex;align-items:center;gap:10px;
+  background:var(--gray-100);border-radius:10px;
+  padding:9px 12px;animation:fadeUp .2s var(--ease);
+}
+.trip-num{
+  width:24px;height:24px;border-radius:50%;
+  background:var(--blue);color:#fff;font-size:11px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.trip-name{flex:1;font-size:13px;font-weight:500;color:var(--text)}
+.del-btn{
+  width:22px;height:22px;border-radius:50%;
+  border:none;background:transparent;color:var(--gray-500);
+  cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;
+  transition:all .15s;
+}
+.del-btn:hover{background:var(--red);color:#fff}
+.trip-hint{padding:0 14px 12px;font-size:12px;color:var(--gray-500);line-height:1.55}
+
+/* Trip result */
+.trip-result{
+  margin:0 14px 14px;border-radius:var(--r);overflow:hidden;
+  display:none;box-shadow:0 1px 6px rgba(0,0,0,.1);
+}
+.trip-result.show{display:block;animation:fadeUp .25s var(--ease)}
+.tr-header{background:var(--green);color:#fff;padding:12px 14px}
+.tr-dist{font-size:22px;font-weight:700;font-family:var(--mono)}
+.tr-meta{font-size:11px;opacity:.85;margin-top:2px}
+.tr-body{background:var(--green-lt);padding:12px 14px}
+.tr-steps{display:flex;flex-direction:column}
+.tr-step{display:flex;align-items:flex-start;gap:10px;padding:5px 0;position:relative}
+.tr-step:not(:last-child)::after{
+  content:'';position:absolute;left:10px;top:22px;bottom:-3px;
+  width:2px;background:rgba(30,142,62,.2);
+}
+.tr-dot{
+  width:20px;height:20px;border-radius:50%;
+  background:var(--green);color:#fff;font-size:10px;font-weight:700;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px;
+}
+.tr-city{font-size:13px;color:var(--gray-900);flex:1}
+.tr-badge{
+  font-size:10px;font-weight:600;color:var(--green);
+  background:rgba(30,142,62,.12);padding:2px 7px;border-radius:8px;margin-left:5px;
+}
+.algo-note{font-size:11px;color:var(--gray-500);margin-top:10px;font-style:italic}
+
+/* Footer */
+.s-footer{
+  padding:9px 14px;border-top:1px solid var(--gray-200);
+  display:flex;align-items:center;gap:6px;
+  font-size:11px;color:var(--gray-500);flex-shrink:0;
+}
+.pill{
+  padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;
+}
+.pill-blue{background:var(--blue-lt);color:var(--blue)}
+.pill-green{background:var(--green-lt);color:var(--green)}
+.pill-orange{background:var(--orange-lt);color:var(--orange)}
+
+/* ══ MAP ═══════════════════════════════════════════════════ */
+#map{width:100%;height:100%;z-index:1}
+
+/* Leaflet popup */
+.leaflet-popup-content-wrapper{
+  border-radius:12px!important;box-shadow:var(--shadow-lg)!important;
+  padding:0!important;overflow:hidden;font-family:var(--font)!important;
+}
+.leaflet-popup-content{margin:0!important}
+.leaflet-popup-tip-container{display:none}
+
+.cp-name{
+  padding:10px 14px 8px;font-size:14px;font-weight:600;
+  color:var(--gray-900);border-bottom:1px solid var(--gray-200);
+}
+.cp-actions{display:flex}
+.cp-btn{
+  flex:1;padding:9px 6px;border:none;cursor:pointer;
+  font-size:12px;font-weight:600;font-family:var(--font);
+  transition:filter .15s;display:flex;align-items:center;justify-content:center;gap:4px;
+}
+.cp-btn:hover{filter:brightness(.92)}
+.cp-btn.from{background:#e6f4ea;color:var(--green)}
+.cp-btn.to{background:#fce8e6;color:var(--red)}
+.cp-btn.trip{background:var(--blue-lt);color:var(--blue)}
+
+/* Node counter overlay */
+.node-counter{
+  position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:rgba(32,33,36,.92);color:#fff;
+  padding:10px 20px;border-radius:24px;
+  font-size:13px;font-weight:500;z-index:2000;
+  opacity:0;pointer-events:none;transition:opacity .3s;
+  white-space:nowrap;backdrop-filter:blur(8px);
+  font-family:var(--mono);
+}
+.node-counter.show{opacity:1}
+
+/* Distance label on map */
+.dist-label{
+  background:var(--blue);color:#fff;
+  padding:4px 10px;border-radius:10px;
+  font-size:12px;font-weight:600;font-family:var(--mono);
+  white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.2);
+}
+.dist-label.green{background:var(--green)}
+.dist-label.orange{background:var(--orange)}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulseIn{0%{transform:scale(0);opacity:0}60%{transform:scale(1.2)}100%{transform:scale(1);opacity:1}}
+
+/* ══ MAP LAYER SWITCHER ════════════════════════════════════ */
+.layer-switcher{
+  position:absolute;
+  bottom:32px;left:16px;
+  z-index:1000;
+  display:flex;gap:8px;
+  filter:drop-shadow(0 2px 8px rgba(0,0,0,.3));
+}
+.layer-btn{
+  width:64px;
+  border:none;background:none;
+  cursor:pointer;padding:0;
+  border-radius:10px;overflow:hidden;
+  outline:3px solid transparent;
+  transition:outline .18s ease,transform .18s ease;
+  position:relative;
+}
+.layer-btn:hover{transform:translateY(-2px)}
+.layer-btn.active{outline:3px solid #1967d2}
+.layer-thumb{
+  width:64px;height:64px;
+  object-fit:cover;display:block;
+  border-radius:10px;
+}
+/* Thumbnail previews using CSS gradients (no image needed) */
+.thumb-street{
+  background:linear-gradient(135deg,#e8edf2 0%,#d4dce8 40%,#c8d4e0 100%);
+  position:relative;overflow:hidden;
+  width:64px;height:64px;border-radius:10px;
+}
+.thumb-street::before{
+  content:'';position:absolute;inset:0;
+  background:
+    linear-gradient(90deg,rgba(255,255,255,.5) 1px,transparent 1px) 0 0/12px 12px,
+    linear-gradient(rgba(255,255,255,.5) 1px,transparent 1px) 0 0/12px 12px;
+}
+.thumb-street::after{
+  content:'';position:absolute;
+  left:8px;top:28px;right:8px;height:3px;
+  background:#aab8cc;border-radius:2px;
+}
+.thumb-satellite{
+  width:64px;height:64px;border-radius:10px;
+  background:
+    radial-gradient(ellipse at 30% 40%,#2d4a1e 0%,transparent 40%),
+    radial-gradient(ellipse at 70% 60%,#1a3310 0%,transparent 35%),
+    radial-gradient(ellipse at 50% 50%,#3a5f28 0%,transparent 60%),
+    linear-gradient(135deg,#1a2e10 0%,#2a4a1a 30%,#1e3a14 60%,#243d18 100%);
+}
+.thumb-terrain{
+  width:64px;height:64px;border-radius:10px;
+  background:
+    radial-gradient(ellipse at 40% 30%,#c8b89a 0%,transparent 35%),
+    radial-gradient(ellipse at 60% 60%,#a8c890 0%,transparent 40%),
+    linear-gradient(160deg,#d4c4a0 0%,#b8d4a0 40%,#98c080 70%,#78a060 100%);
+}
+.layer-label{
+  position:absolute;bottom:0;left:0;right:0;
+  background:rgba(0,0,0,.55);color:#fff;
+  font-size:10px;font-weight:600;
+  text-align:center;padding:3px 0;
+  font-family:'DM Sans',sans-serif;
+  letter-spacing:.3px;
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- ════════ SIDEBAR ════════ -->
+<div class="sidebar">
+  <div class="s-head">
+    <div class="logo-row">
+      <div class="logo-mark">🗺</div>
+      <div>
+        <div class="logo-name">G<em>Map</em></div>
+      </div>
+      <div class="logo-ver">v3.0</div>
+      <div class="s-spinner" id="spinner"></div>
+    </div>
+
+    <div class="search-wrap">
+      <span class="s-ico">🔍</span>
+      <input id="globalSearch" type="text" placeholder="Search cities..." autocomplete="off">
+    </div>
+
+    <div class="tabs">
+      <div class="tab active" data-tab="dir">🚗 Directions</div>
+      <div class="tab" data-tab="bench">⚡ Benchmark</div>
+      <div class="tab" data-tab="trip">🗺 Road Trip</div>
+    </div>
+  </div>
+
+  <div class="s-body">
+
+    <!-- ── DIRECTIONS TAB ── -->
+    <div class="panel active" id="panel-dir">
+
+      <!-- Algorithm selector -->
+      <div class="algo-section">
+        <div class="algo-label">ALGORITHM</div>
+        <div class="algo-toggle">
+          <button class="algo-btn active" data-algo="dijkstra">Dijkstra<br><span style="font-weight:400;opacity:.7">Classic</span></button>
+          <button class="algo-btn"        data-algo="astar">A★ Star<br><span style="font-weight:400;opacity:.7">Faster</span></button>
+          <button class="algo-btn"        data-algo="bidi">Bi-Di<br><span style="font-weight:400;opacity:.7">Meet Middle</span></button>
+        </div>
+      </div>
+
+      <div class="algo-info" id="algoInfo">
+        <strong>Dijkstra</strong> — explores all cities within distance <em>d</em> from source. Guaranteed optimal. Nodes explored: proportional to search area.
+      </div>
+
+      <div class="field-group">
+        <div class="field-wrap" id="fw-from">
+          <div class="badge badge-a">A</div>
+          <input id="inp-from" type="text" placeholder="Starting city" autocomplete="off">
+          <div class="ac-list" id="ac-from"></div>
+        </div>
+        <div class="swap-row">
+          <button class="swap-btn" id="swapBtn">⇅</button>
+        </div>
+        <div class="field-wrap" id="fw-to">
+          <div class="badge badge-b">B</div>
+          <input id="inp-to" type="text" placeholder="Destination city" autocomplete="off">
+          <div class="ac-list" id="ac-to"></div>
+        </div>
+      </div>
+
+      <div class="err" id="dir-err"></div>
+      <button class="primary-btn" id="findBtn">🔍 Find Route</button>
+
+      <div class="stats-card" id="stats-card">
+        <div class="stats-header blue-hdr" id="stats-header">
+          <div>
+            <div class="stats-dist" id="stats-dist"></div>
+            <div class="stats-route" id="stats-route"></div>
+          </div>
+          <div class="stats-algo-name" id="stats-algo-name"></div>
+        </div>
+        <div class="metrics-row">
+          <div class="metric">
+            <div class="metric-val blue" id="m-nodes">—</div>
+            <div class="metric-label">NODES EXPLORED</div>
+          </div>
+          <div class="metric">
+            <div class="metric-val" id="m-path">—</div>
+            <div class="metric-label">CITIES IN PATH</div>
+          </div>
+          <div class="metric">
+            <div class="metric-val" id="m-time">—</div>
+            <div class="metric-label">TIME (µs)</div>
+          </div>
+        </div>
+        <div class="route-body" id="route-body">
+          <div class="steps" id="steps"></div>
+        </div>
+      </div>
+    </div><!-- panel-dir -->
+
+    <!-- ── BENCHMARK TAB ── -->
+    <div class="panel" id="panel-bench">
+      <div style="padding:14px 14px 10px">
+        <div style="font-size:13px;color:var(--gray-700);line-height:1.6;margin-bottom:14px">
+          Run all 3 algorithms on the same route and see exactly why <strong>A*</strong> and <strong>Bidirectional Dijkstra</strong> explore fewer nodes — that's the key to scaling to millions of cities.
+        </div>
+        <div class="field-group" style="padding:0;gap:10px">
+          <div class="field-wrap" id="bfw-from">
+            <div class="badge badge-a">A</div>
+            <input id="binp-from" type="text" placeholder="Starting city" autocomplete="off">
+            <div class="ac-list" id="bac-from"></div>
+          </div>
+          <div class="field-wrap" id="bfw-to">
+            <div class="badge badge-b">B</div>
+            <input id="binp-to" type="text" placeholder="Destination city" autocomplete="off">
+            <div class="ac-list" id="bac-to"></div>
+          </div>
+        </div>
+      </div>
+      <div class="err" id="bench-err"></div>
+      <button class="primary-btn" id="benchBtn" style="margin-top:4px">⚡ Run Benchmark</button>
+
+      <div class="bench-card" id="bench-card">
+        <div class="bench-header">
+          <div>
+            <div class="bench-title" id="bench-title">Algorithm Comparison</div>
+            <div class="bench-sub" id="bench-sub"></div>
+          </div>
+          <div class="winner-badge" id="winner-badge"></div>
+        </div>
+        <div class="bench-rows" id="bench-rows"></div>
+      </div>
+
+      <div style="padding:0 14px 14px;font-size:12px;color:var(--gray-500);line-height:1.6;display:none" id="bench-insight"></div>
+    </div><!-- panel-bench -->
+
+    <!-- ── TRIP TAB ── -->
+    <div class="panel" id="panel-trip">
+      <div class="trip-hint" style="padding-top:12px">
+        Add cities to visit. GMap finds the <strong>most efficient order</strong> using Nearest-Neighbour + 2-opt TSP.
+      </div>
+      <div class="trip-add-row">
+        <input class="trip-input" id="tripInp" type="text" placeholder="Add a city..." autocomplete="off">
+        <button class="add-btn" id="tripAddBtn">+</button>
+        <div class="ac-list" id="ac-trip"></div>
+      </div>
+      <div class="trip-list" id="tripList"></div>
+      <div class="err" id="trip-err"></div>
+      <button class="primary-btn green-btn" id="planBtn">✈️ Plan Optimal Trip</button>
+      <div class="trip-result" id="trip-result">
+        <div class="tr-header">
+          <div class="tr-dist" id="tr-dist"></div>
+          <div class="tr-meta" id="tr-meta"></div>
+        </div>
+        <div class="tr-body">
+          <div class="tr-steps" id="tr-steps"></div>
+          <div class="algo-note">🧠 Nearest-Neighbour + 2-opt local search</div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- s-body -->
+
+  <div class="s-footer">
+    <span>Algorithms:</span>
+    <span class="pill pill-blue">Dijkstra</span>
+    <span class="pill pill-green">A★</span>
+    <span class="pill pill-orange">BiDi</span>
+    <span style="margin-left:auto">31 cities · 56 roads</span>
+  </div>
+</div><!-- sidebar -->
+
+<!-- ════════ MAP ════════ -->
+<div style="flex:1;height:100%;position:relative">
+
+  <!-- Map Layer Switcher — Google Maps style -->
+  <div class="layer-switcher" id="layerSwitcher">
+    <button class="layer-btn active" data-layer="street" onclick="switchLayer('street')">
+      <div class="thumb-street"></div>
+      <div class="layer-label">Default</div>
+    </button>
+    <button class="layer-btn" data-layer="satellite" onclick="switchLayer('satellite')">
+      <div class="thumb-satellite"></div>
+      <div class="layer-label">Satellite</div>
+    </button>
+    <button class="layer-btn" data-layer="terrain" onclick="switchLayer('terrain')">
+      <div class="thumb-terrain"></div>
+      <div class="layer-label">Terrain</div>
+    </button>
+  </div>
+
+  <div id="map" style="width:100%;height:100%"></div>
+</div>
+</div><!-- app -->
+
+<div class="node-counter" id="nodeCounter"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//  DATA
+// ═══════════════════════════════════════════════════════════════
+const CITIES=[
+  {id:0,name:"Bengaluru",lat:12.9716,lon:77.5946},
+  {id:1,name:"Chennai",lat:13.0827,lon:80.2707},
+  {id:2,name:"Hyderabad",lat:17.3850,lon:78.4867},
+  {id:3,name:"Kochi",lat:9.9312,lon:76.2673},
+  {id:4,name:"Mysuru",lat:12.2958,lon:76.6394},
+  {id:5,name:"Mangaluru",lat:12.9141,lon:74.8560},
+  {id:6,name:"Coimbatore",lat:11.0168,lon:76.9558},
+  {id:7,name:"Visakhapatnam",lat:17.6868,lon:83.2185},
+  {id:8,name:"Madurai",lat:9.9252,lon:78.1198},
+  {id:9,name:"Vijayawada",lat:16.5062,lon:80.6480},
+  {id:10,name:"Mumbai",lat:19.0760,lon:72.8777},
+  {id:11,name:"Pune",lat:18.5204,lon:73.8567},
+  {id:12,name:"Ahmedabad",lat:23.0225,lon:72.5714},
+  {id:13,name:"Surat",lat:21.1702,lon:72.8311},
+  {id:14,name:"Nagpur",lat:21.1458,lon:79.0882},
+  {id:15,name:"Goa",lat:15.2993,lon:74.1240},
+  {id:16,name:"Delhi",lat:28.6139,lon:77.2090},
+  {id:17,name:"Jaipur",lat:26.9124,lon:75.7873},
+  {id:18,name:"Agra",lat:27.1767,lon:78.0081},
+  {id:19,name:"Lucknow",lat:26.8467,lon:80.9462},
+  {id:20,name:"Varanasi",lat:25.3176,lon:82.9739},
+  {id:21,name:"Chandigarh",lat:30.7333,lon:76.7794},
+  {id:22,name:"Amritsar",lat:31.6340,lon:74.8723},
+  {id:23,name:"Kanpur",lat:26.4499,lon:80.3319},
+  {id:24,name:"Kolkata",lat:22.5726,lon:88.3639},
+  {id:25,name:"Bhubaneswar",lat:20.2961,lon:85.8245},
+  {id:26,name:"Patna",lat:25.5941,lon:85.1376},
+  {id:27,name:"Bhopal",lat:23.2599,lon:77.4126},
+  {id:28,name:"Indore",lat:22.7196,lon:75.8577},
+  {id:29,name:"Raipur",lat:21.2514,lon:81.6296},
+  {id:30,name:"Guwahati",lat:26.1445,lon:91.7362},
+];
+const ROADS=[
+  [0,1,346],[0,2,570],[0,4,143],[0,5,352],[0,6,366],[0,3,566],
+  [1,6,498],[1,8,462],[1,9,435],[1,7,791],
+  [2,9,275],[2,7,625],[2,14,500],[2,11,564],
+  [3,6,183],[3,8,246],[4,6,215],[5,15,381],[5,3,325],[6,8,213],
+  [9,7,347],[15,11,456],[15,10,590],[14,11,738],
+  [10,11,155],[10,13,290],[10,14,900],[11,14,738],
+  [13,12,272],[12,17,673],[12,28,397],[14,29,296],[14,27,360],
+  [17,16,281],[17,18,240],[27,28,195],[27,16,778],[28,10,585],
+  [16,18,233],[16,21,245],[16,19,555],[16,23,490],
+  [21,22,237],[18,19,363],[18,23,296],[19,20,330],[19,23,82],
+  [23,20,335],[20,26,292],[24,25,473],[24,26,596],[24,30,1031],
+  [25,7,450],[25,29,499],[26,20,292],[29,24,700],
+];
+const N=CITIES.length,INF=Infinity;
+const adj=Array.from({length:N},()=>[]);
+ROADS.forEach(([u,v,d])=>{adj[u].push({to:v,d});adj[v].push({to:u,d})});
+
+// ═══════════════════════════════════════════════════════════════
+//  ALGORITHMS
+// ═══════════════════════════════════════════════════════════════
+
+// Haversine heuristic
+function haversine(i,j){
+  const R=6371,a=CITIES[i],b=CITIES[j];
+  const dLat=(b.lat-a.lat)*Math.PI/180,dLon=(b.lon-a.lon)*Math.PI/180;
+  const x=Math.sin(dLat/2)**2+Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+}
+
+// Generic result with stats
+function mkStats(name,dist,nodes,path,t0){
+  return{name,dist,nodes,path,time:performance.now()-t0};
+}
+
+// 1. Dijkstra
+function dijkstra(src,dst){
+  const t0=performance.now();
+  const g=new Array(N).fill(INF),par=new Array(N).fill(-1),vis=new Array(N).fill(false);
+  g[src]=0;let nodes=0;
+  const pq=[[0,src]];
+  while(pq.length){
+    pq.sort((a,b)=>a[0]-b[0]);
+    const[d,u]=pq.shift();
+    if(vis[u])continue;vis[u]=true;nodes++;
+    if(u===dst)break;
+    for(const{to:v,d:w}of adj[u])if(g[u]+w<g[v]){g[v]=g[u]+w;par[v]=u;pq.push([g[v],v]);}
+  }
+  if(g[dst]===INF)return null;
+  const path=[];for(let c=dst;c!==-1;c=par[c])path.unshift(c);
+  return mkStats('Dijkstra',g[dst],nodes,path,t0);
+}
+
+// 2. A*
+function astar(src,dst){
+  const t0=performance.now();
+  const g=new Array(N).fill(INF),par=new Array(N).fill(-1),vis=new Array(N).fill(false);
+  g[src]=0;let nodes=0;
+  const pq=[[haversine(src,dst),src]];
+  while(pq.length){
+    pq.sort((a,b)=>a[0]-b[0]);
+    const[,u]=pq.shift();
+    if(vis[u])continue;vis[u]=true;nodes++;
+    if(u===dst)break;
+    for(const{to:v,d:w}of adj[u])if(g[u]+w<g[v]){g[v]=g[u]+w;par[v]=u;pq.push([g[v]+haversine(v,dst),v]);}
+  }
+  if(g[dst]===INF)return null;
+  const path=[];for(let c=dst;c!==-1;c=par[c])path.unshift(c);
+  return mkStats('A★',g[dst],nodes,path,t0);
+}
+
+// 3. Bidirectional Dijkstra
+function biDijkstra(src,dst){
+  const t0=performance.now();
+  if(src===dst)return mkStats('Bidirectional',0,0,[src],t0);
+  const gF=new Array(N).fill(INF),gB=new Array(N).fill(INF);
+  const pF=new Array(N).fill(-1),pB=new Array(N).fill(-1);
+  const vF=new Array(N).fill(false),vB=new Array(N).fill(false);
+  gF[src]=gB[dst]=0;
+  const hF=[[0,src]],hB=[[0,dst]];
+  let best=INF,meet=-1,nodes=0;
+  const relax=(u,g,par,heap,gO)=>{
+    for(const{to:v,d:w}of adj[u]){
+      if(g[u]+w<g[v]){g[v]=g[u]+w;par[v]=u;heap.push([g[v],v]);}
+      if(gO[v]<INF&&g[u]+w+gO[v]<best){best=g[u]+w+gO[v];meet=v;}
+    }
+  };
+  while(hF.length||hB.length){
+    const fwd=!hF.length?false:!hB.length?true:hF[0][0]<=hB[0][0];
+    if(fwd){
+      hF.sort((a,b)=>a[0]-b[0]);const[d,u]=hF.shift();
+      if(vF[u])continue;vF[u]=true;nodes++;
+      if(vB[u]){if(gF[u]+gB[u]<best){best=gF[u]+gB[u];meet=u;}break;}
+      relax(u,gF,pF,hF,gB);
+    }else{
+      hB.sort((a,b)=>a[0]-b[0]);const[d,u]=hB.shift();
+      if(vB[u])continue;vB[u]=true;nodes++;
+      if(vF[u]){if(gF[u]+gB[u]<best){best=gF[u]+gB[u];meet=u;}break;}
+      relax(u,gB,pB,hB,gF);
+    }
+  }
+  if(best===INF||meet===-1)return null;
+  const fwd=[];for(let c=meet;c!==-1;c=pF[c])fwd.unshift(c);
+  const bwd=[];for(let c=pB[meet];c!==-1;c=pB[c])bwd.push(c);
+  return mkStats('Bidirectional',best,nodes,[...fwd,...bwd],t0);
+}
+
+// TSP
+function allPairs(ids){
+  const n=ids.length;
+  const mat=Array.from({length:n},()=>new Array(n).fill(INF));
+  for(let i=0;i<n;i++){mat[i][i]=0;for(let j=i+1;j<n;j++){const r=dijkstra(ids[i],ids[j]);if(r){mat[i][j]=mat[j][i]=r.dist;}}}
+  return mat;
+}
+function planTrip(ids){
+  const n=ids.length,mat=allPairs(ids);
+  const vis=new Array(n).fill(false);let tour=[0];vis[0]=true;
+  for(let s=1;s<n;s++){let cur=tour[tour.length-1],best=-1,bd=INF;for(let j=0;j<n;j++)if(!vis[j]&&mat[cur][j]<bd){bd=mat[cur][j];best=j;}if(best===-1)break;tour.push(best);vis[best]=true;}
+  tour.push(tour[0]);
+  let imp=true;while(imp){imp=false;for(let i=0;i<n-1;i++)for(let j=i+2;j<n;j++){if(i===0&&j===n-1)continue;const b=mat[tour[i]][tour[i+1]]+mat[tour[j]][tour[j+1]],a=mat[tour[i]][tour[j]]+mat[tour[i+1]][tour[j+1]];if(a<b-1e-9){let l=i+1,r=j;while(l<r){[tour[l],tour[r]]=[tour[r],tour[l]];l++;r--;}imp=true;}}}
+  let tot=0;for(let i=0;i<tour.length-1;i++)tot+=mat[tour[i]][tour[i+1]];
+  return{tour:tour.map(i=>ids[i]),total:tot};
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  LEAFLET MAP
+// ═══════════════════════════════════════════════════════════════
+const map=L.map('map',{center:[20.5937,78.9629],zoom:5,zoomControl:true});
+
+// ── Tile layers — 3 options exactly like Google Maps ──────────
+const TILE_LAYERS = {
+  street: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://openstreetmap.org">OpenStreetMap</a>',
+    maxZoom:19
+  }),
+  satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+    attribution:'© <a href="https://www.esri.com">Esri</a> — Source: Esri, Maxar, GeoEye, Earthstar Geographics',
+    maxZoom:19
+  }),
+  terrain: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://opentopomap.org">OpenTopoMap</a> (CC-BY-SA)',
+    maxZoom:17
+  }),
+};
+
+// Start with street view
+let currentTileLayer = TILE_LAYERS.street;
+currentTileLayer.addTo(map);
+
+// Layer switcher function
+function switchLayer(name) {
+  // Remove current
+  map.removeLayer(currentTileLayer);
+  // Add new
+  currentTileLayer = TILE_LAYERS[name];
+  currentTileLayer.addTo(map);
+  // Move to back so routes stay on top
+  currentTileLayer.bringToBack();
+  // Update active button
+  document.querySelectorAll('.layer-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.layer === name);
+  });
+  // Adjust road opacity for satellite (more visible)
+  const roadOpacity = name === 'satellite' ? 0.8 : 0.55;
+  roadLines.forEach(l => l.setStyle({opacity: roadOpacity}));
+  // Toast
+  showNodeCounter('',0,{street:'🗺 Default Map',satellite:'🛰 Satellite View',terrain:'⛰ Terrain View'}[name]);
+}
+
+map.zoomControl.setPosition('bottomright');
+
+// City markers
+const markers={};
+CITIES.forEach(c=>{
+  const m=L.marker([c.lat,c.lon],{
+    icon:L.divIcon({className:'',iconSize:[22,22],iconAnchor:[11,11],
+      html:`<div style="width:22px;height:22px;border-radius:50%;background:#4a6fa5;border:2.5px solid white;box-shadow:0 2px 8px rgba(0,0,0,.3)"></div>`}),
+    title:c.name
+  }).addTo(map);
+  m.bindPopup(`<div class="city-popup">
+    <div class="cp-name">📍 ${c.name}</div>
+    <div class="cp-actions">
+      <button class="cp-btn from" onclick="setFrom(${c.id})">▶ From</button>
+      <button class="cp-btn to"   onclick="setTo(${c.id})">🏁 To</button>
+      <button class="cp-btn trip" onclick="addToTrip(${c.id})">+ Trip</button>
+    </div>
+  </div>`,{maxWidth:220,closeButton:false});
+  markers[c.id]=m;
+});
+
+// Road lines — stored so we can adjust opacity per map layer
+const roadLines = [];
+ROADS.forEach(([u,v])=>{
+  const l = L.polyline([[CITIES[u].lat,CITIES[u].lon],[CITIES[v].lat,CITIES[v].lon]],
+    {color:'#93a5c8',weight:2,opacity:0.55}).addTo(map);
+  roadLines.push(l);
+});
+
+// Route overlay management
+let routeLayer=null,extraMarkers=[];
+function clearRoute(){
+  if(routeLayer){map.removeLayer(routeLayer);routeLayer=null;}
+  extraMarkers.forEach(m=>map.removeLayer(m));extraMarkers=[];
+  CITIES.forEach(c=>markers[c.id].setIcon(defaultIcon()));
+}
+function defaultIcon(col='#4a6fa5'){
+  return L.divIcon({className:'',iconSize:[22,22],iconAnchor:[11,11],
+    html:`<div style="width:22px;height:22px;border-radius:50%;background:${col};border:2.5px solid white;box-shadow:0 2px 8px rgba(0,0,0,.3)"></div>`});
+}
+function pinIcon(label,col){
+  return L.divIcon({className:'',iconSize:[36,44],iconAnchor:[18,44],
+    html:`<div style="width:36px;height:44px;display:flex;flex-direction:column;align-items:center">
+      <div style="width:32px;height:32px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);
+        background:${col};border:3px solid white;box-shadow:0 3px 12px rgba(0,0,0,.3);">
+        <div style="transform:rotate(45deg);width:100%;height:100%;display:flex;align-items:center;
+          justify-content:center;color:white;font-weight:700;font-size:13px;font-family:'DM Mono',monospace">${label}</div>
+      </div></div>`});
+}
+function numIcon(n,col='#1967d2'){
+  return L.divIcon({className:'',iconSize:[30,30],iconAnchor:[15,15],
+    html:`<div style="width:30px;height:30px;border-radius:50%;background:${col};
+      border:2.5px solid white;box-shadow:0 2px 8px rgba(0,0,0,.3);
+      display:flex;align-items:center;justify-content:center;
+      color:white;font-size:12px;font-weight:700;font-family:'DM Mono',monospace">${n}</div>`});
+}
+
+function algoColor(name){
+  if(name==='A★')return'#1e8e3e';
+  if(name==='Bidirectional')return'#e37400';
+  return'#1967d2';
+}
+
+function drawRoute(res){
+  clearRoute();
+  const col=algoColor(res.name);
+  const latlngs=res.path.map(id=>[CITIES[id].lat,CITIES[id].lon]);
+  routeLayer=L.polyline(latlngs,{color:col,weight:6,opacity:.85,lineCap:'round',lineJoin:'round'}).addTo(map);
+  map.fitBounds(routeLayer.getBounds(),{padding:[50,50]});
+
+  // A pin
+  const aPin=L.marker([CITIES[res.path[0]].lat,CITIES[res.path[0]].lon],
+    {icon:pinIcon('A','#1e8e3e')}).addTo(map);
+  // B pin
+  const bPin=L.marker([CITIES[res.path[res.path.length-1]].lat,CITIES[res.path[res.path.length-1]].lon],
+    {icon:pinIcon('B','#c5221f')}).addTo(map);
+  extraMarkers.push(aPin,bPin);
+
+  // Distance label
+  const mid=res.path[Math.floor(res.path.length/2)];
+  const dl=L.marker([CITIES[mid].lat,CITIES[mid].lon],{
+    icon:L.divIcon({className:'',html:`<div class="dist-label" style="background:${col}">${Math.round(res.dist).toLocaleString()} km</div>`,iconAnchor:[30,10]})
+  }).addTo(map);
+  extraMarkers.push(dl);
+
+  // Highlight path cities
+  res.path.forEach(id=>markers[id].setIcon(defaultIcon(col)));
+}
+
+function drawTripRoute(tour,total){
+  clearRoute();
+  const latlngs=tour.map(id=>[CITIES[id].lat,CITIES[id].lon]);
+  routeLayer=L.polyline(latlngs,{color:'#1e8e3e',weight:5,opacity:.85,lineCap:'round'}).addTo(map);
+  map.fitBounds(routeLayer.getBounds(),{padding:[60,60]});
+  tour.slice(0,-1).forEach((id,i)=>{
+    const m=L.marker([CITIES[id].lat,CITIES[id].lon],
+      {icon:numIcon(i===0?'🏠':i+1,i===0?'#1e8e3e':'#1967d2')}).addTo(map);
+    extraMarkers.push(m);
+  });
+  const mid=tour[Math.floor(tour.length/2)];
+  const dl=L.marker([CITIES[mid].lat,CITIES[mid].lon],{
+    icon:L.divIcon({className:'',html:`<div class="dist-label green">${Math.round(total).toLocaleString()} km total</div>`,iconAnchor:[50,10]})
+  }).addTo(map);
+  extraMarkers.push(dl);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  AUTOCOMPLETE
+// ═══════════════════════════════════════════════════════════════
+function buildAC(inp,listEl,onPick){
+  inp.addEventListener('input',()=>{
+    const q=inp.value.trim().toLowerCase();
+    listEl.innerHTML='';
+    if(!q){listEl.classList.remove('open');return;}
+    const hits=CITIES.filter(c=>c.name.toLowerCase().includes(q)).slice(0,8);
+    if(!hits.length){listEl.classList.remove('open');return;}
+    hits.forEach(c=>{
+      const d=document.createElement('div');d.className='ac-item';
+      d.innerHTML=`<span class="ac-pin">📍</span>${c.name}`;
+      d.addEventListener('mousedown',e=>{e.preventDefault();inp.value=c.name;listEl.classList.remove('open');onPick(c.id);});
+      listEl.appendChild(d);
+    });
+    listEl.classList.add('open');
+  });
+  inp.addEventListener('blur',()=>setTimeout(()=>listEl.classList.remove('open'),160));
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  ALGORITHM TOGGLE
+// ═══════════════════════════════════════════════════════════════
+let currentAlgo='dijkstra';
+const algoInfos={
+  dijkstra:{
+    cls:'',
+    text:'<strong>Dijkstra</strong> — explores all cities within distance <em>d</em> from source. Guaranteed optimal. Nodes: proportional to full search radius.'
+  },
+  astar:{
+    cls:'green',
+    text:'<strong>A★ (A-Star)</strong> — adds a Haversine heuristic to guide the search toward the destination. Explores <em>far fewer nodes</em> than Dijkstra while staying optimal.'
+  },
+  bidi:{
+    cls:'orange',
+    text:'<strong>Bidirectional Dijkstra</strong> — runs two searches simultaneously from both ends, meeting in the middle. Covers ~half the nodes of one-way Dijkstra.'
+  }
+};
+
+document.querySelectorAll('.algo-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.algo-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    currentAlgo=btn.dataset.algo;
+    const info=algoInfos[currentAlgo];
+    const el=document.getElementById('algoInfo');
+    el.className='algo-info '+(info.cls||'');
+    el.innerHTML=info.text;
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  DIRECTIONS
+// ═══════════════════════════════════════════════════════════════
+let fromId=-1,toId=-1;
+const inpFrom=document.getElementById('inp-from');
+const inpTo=document.getElementById('inp-to');
+buildAC(inpFrom,document.getElementById('ac-from'),id=>{fromId=id;document.getElementById('dir-err').classList.remove('show');});
+buildAC(inpTo,document.getElementById('ac-to'),id=>{toId=id;document.getElementById('dir-err').classList.remove('show');});
+
+document.getElementById('swapBtn').addEventListener('click',()=>{
+  [fromId,toId]=[toId,fromId];[inpFrom.value,inpTo.value]=[inpTo.value,inpFrom.value];
+});
+document.getElementById('findBtn').addEventListener('click',runRoute);
+inpFrom.addEventListener('keydown',e=>e.key==='Enter'&&runRoute());
+inpTo.addEventListener('keydown',e=>e.key==='Enter'&&runRoute());
+
+function resolve(inp,stored){
+  if(stored!==-1)return stored;
+  const m=CITIES.find(c=>c.name.toLowerCase()===inp.value.trim().toLowerCase());
+  return m?m.id:-1;
+}
+
+function runRoute(){
+  const f=resolve(inpFrom,fromId),t=resolve(inpTo,toId);
+  if(f===-1||t===-1){showErr('dir-err','Please select valid cities.');return;}
+  if(f===t){showErr('dir-err','Start and destination must be different.');return;}
+  fromId=f;toId=t;
+  document.getElementById('spinner').classList.add('show');
+  document.getElementById('dir-err').classList.remove('show');
+  document.getElementById('stats-card').classList.remove('show');
+
+  setTimeout(()=>{
+    const runFn={dijkstra,astar,bidi:biDijkstra}[currentAlgo];
+    const res=runFn(f,t);
+    document.getElementById('spinner').classList.remove('show');
+    if(!res){showErr('dir-err','No route found between these cities.');return;}
+
+    // Draw on map
+    drawRoute(res);
+
+    // Fill stats card
+    const col=algoColor(res.name);
+    const hdr=document.getElementById('stats-header');
+    hdr.className='stats-header';
+    if(res.name==='A★')hdr.classList.add('green-hdr');
+    else if(res.name==='Bidirectional')hdr.classList.add('orange-hdr');
+    else hdr.classList.add('blue-hdr');
+
+    document.getElementById('stats-dist').textContent=`${Math.round(res.dist).toLocaleString()} km`;
+    document.getElementById('stats-route').textContent=`${CITIES[f].name} → ${CITIES[t].name} · ${res.path.length} cities`;
+    document.getElementById('stats-algo-name').textContent=res.name;
+
+    const nodeEl=document.getElementById('m-nodes');
+    nodeEl.textContent=res.nodes;
+    nodeEl.className='metric-val'+(res.name==='A★'?' green':res.name==='Bidirectional'?' orange':' blue');
+
+    document.getElementById('m-path').textContent=res.path.length;
+    document.getElementById('m-time').textContent=res.time.toFixed(1);
+
+    // Route steps
+    const stepsEl=document.getElementById('steps');
+    stepsEl.innerHTML='';
+    const rb=document.getElementById('route-body');
+    rb.className='route-body'+(res.name==='A★'?' green-body':res.name==='Bidirectional'?' orange-body':'');
+    res.path.forEach((id,i)=>{
+      const isF=i===0,isL=i===res.path.length-1;
+      const edge=ROADS.find(([u,v])=>(u===id&&v===res.path[i+1])||(v===id&&u===res.path[i+1]));
+      const km=edge&&!isL?`${edge[2]} km`:'';
+      const d=document.createElement('div');d.className='step';
+      let cls='step-num';let lbl=i+1;
+      if(isF){cls+=' s';lbl='A';}if(isL){cls+=' e';lbl='B';}
+      d.innerHTML=`<div class="${cls}">${lbl}</div>
+        <div class="step-city">${CITIES[id].name}</div>
+        ${km?`<div class="step-km">→ ${km}</div>`:''}`;
+      stepsEl.appendChild(d);
+    });
+
+    document.getElementById('stats-card').classList.add('show');
+
+    // Animated node counter toast
+    showNodeCounter(res.name,res.nodes);
+  },100);
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  BENCHMARK TAB
+// ═══════════════════════════════════════════════════════════════
+let bFromId=-1,bToId=-1;
+buildAC(document.getElementById('binp-from'),document.getElementById('bac-from'),id=>bFromId=id);
+buildAC(document.getElementById('binp-to'),document.getElementById('bac-to'),id=>bToId=id);
+
+document.getElementById('benchBtn').addEventListener('click',()=>{
+  const f=resolve(document.getElementById('binp-from'),bFromId);
+  const t=resolve(document.getElementById('binp-to'),bToId);
+  if(f===-1||t===-1){showErr('bench-err','Please select valid cities.');return;}
+  if(f===t){showErr('bench-err','Cities must be different.');return;}
+  bFromId=f;bToId=t;
+  document.getElementById('spinner').classList.add('show');
+  document.getElementById('bench-err').classList.remove('show');
+
+  setTimeout(()=>{
+    const r1=dijkstra(f,t);
+    const r2=astar(f,t);
+    const r3=biDijkstra(f,t);
+    document.getElementById('spinner').classList.remove('show');
+    if(!r1){showErr('bench-err','No route found.');return;}
+
+    // Draw last algo (A*) on map
+    drawRoute(r2||r1);
+
+    const results=[r1,r2,r3].filter(Boolean);
+    const minNodes=Math.min(...results.map(r=>r.nodes));
+    const winner=results.find(r=>r.nodes===minNodes);
+
+    document.getElementById('bench-title').textContent='Algorithm Comparison';
+    document.getElementById('bench-sub').textContent=`${CITIES[f].name} → ${CITIES[t].name} · All return ${Math.round(r1.dist)} km`;
+    document.getElementById('winner-badge').textContent=`🏆 ${winner.name}`;
+
+    const rowsEl=document.getElementById('bench-rows');
+    rowsEl.innerHTML='';
+    const maxNodes=Math.max(...results.map(r=>r.nodes));
+
+    results.forEach(r=>{
+      const isWinner=r.nodes===minNodes;
+      const col=algoColor(r.name);
+      const pct=maxNodes>0?Math.round(r.nodes/maxNodes*100):100;
+      const saved=r1.nodes>0?Math.round((1-r.nodes/r1.nodes)*100):0;
+
+      const row=document.createElement('div');row.className='bench-row';
+      row.innerHTML=`
+        <div>
+          <div class="bench-algo">${r.name}${isWinner?'  🏆':''}
+            <small>${r.name==='Dijkstra'?'O((V+E)logV) — full radius':r.name==='A★'?'O((V+E)logV) — guided search':'O((V+E)logV) — meet-in-middle'}</small>
+          </div>
+          <div class="bench-bar-wrap"><div class="bench-bar" style="width:${pct}%;background:${col}"></div></div>
+        </div>
+        <div class="bench-stat ${isWinner?'winner':''}">${r.nodes}<br><span style="font-size:10px;font-weight:400;color:var(--gray-500)">nodes</span></div>
+        <div class="bench-stat">${r.time.toFixed(1)}<br><span style="font-size:10px;font-weight:400;color:var(--gray-500)">µs</span></div>
+        <div class="bench-stat">${saved>0?`-${saved}%`:'—'}<br><span style="font-size:10px;font-weight:400;color:var(--green)">${saved>0?'saved':''}</span></div>
+      `;
+      rowsEl.appendChild(row);
+    });
+
+    document.getElementById('bench-card').classList.add('show');
+
+    const insight=document.getElementById('bench-insight');
+    insight.style.display='block';
+    const astarSave=r1&&r2?Math.round((1-r2.nodes/r1.nodes)*100):0;
+    const bidiSave=r1&&r3?Math.round((1-r3.nodes/r1.nodes)*100):0;
+    insight.innerHTML=`💡 <strong>On 1,000,000 cities:</strong> A★ would explore ~${astarSave}% fewer nodes, BiDi ~${bidiSave}% fewer. That's the difference between <em>2 seconds</em> and <em>0.1 seconds</em>.`;
+  },100);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  ROAD TRIP TAB
+// ═══════════════════════════════════════════════════════════════
+let tripIds=[];
+buildAC(document.getElementById('tripInp'),document.getElementById('ac-trip'),id=>addToTrip(id));
+document.getElementById('tripAddBtn').addEventListener('click',()=>{
+  const m=CITIES.find(c=>c.name.toLowerCase()===document.getElementById('tripInp').value.trim().toLowerCase());
+  if(m)addToTrip(m.id);else showErr('trip-err',`City not found.`);
+});
+document.getElementById('tripInp').addEventListener('keydown',e=>e.key==='Enter'&&document.getElementById('tripAddBtn').click());
+
+function addToTrip(id){
+  if(tripIds.includes(id)){showNodeCounter('',0,'Already added: '+CITIES[id].name);return;}
+  tripIds.push(id);document.getElementById('tripInp').value='';
+  document.getElementById('ac-trip').classList.remove('open');
+  document.getElementById('trip-err').classList.remove('show');
+  renderTripList();switchTab('trip');
+  showNodeCounter('',0,'✓ Added: '+CITIES[id].name);
+}
+function removeTrip(i){tripIds.splice(i,1);renderTripList();}
+function renderTripList(){
+  const el=document.getElementById('tripList');el.innerHTML='';
+  tripIds.forEach((id,i)=>{
+    const d=document.createElement('div');d.className='trip-item';
+    d.innerHTML=`<div class="trip-num">${i+1}</div>
+      <div class="trip-name">${CITIES[id].name}</div>
+      <button class="del-btn" onclick="removeTrip(${i})">×</button>`;
+    el.appendChild(d);
+  });
+}
+document.getElementById('planBtn').addEventListener('click',()=>{
+  if(tripIds.length<2){showErr('trip-err','Add at least 2 cities.');return;}
+  document.getElementById('spinner').classList.add('show');
+  document.getElementById('trip-err').classList.remove('show');
+  document.getElementById('trip-result').classList.remove('show');
+  setTimeout(()=>{
+    const{tour,total}=planTrip([...tripIds]);
+    document.getElementById('spinner').classList.remove('show');
+    drawTripRoute(tour,total);
+    document.getElementById('tr-dist').textContent=`${Math.round(total).toLocaleString()} km`;
+    document.getElementById('tr-meta').textContent=`${tripIds.length} cities · Round trip from ${CITIES[tour[0]].name}`;
+    const stEl=document.getElementById('tr-steps');stEl.innerHTML='';
+    tour.forEach((id,i)=>{
+      const isL=i===tour.length-1;
+      const d=document.createElement('div');d.className='tr-step';
+      const badge=(i===0||isL)?`<span class="tr-badge">${i===0?'Start':'Return'}</span>`:'';
+      d.innerHTML=`<div class="tr-dot">${isL?'↩':i+1}</div>
+        <div class="tr-city">${CITIES[id].name}${badge}</div>`;
+      stEl.appendChild(d);
+    });
+    document.getElementById('trip-result').classList.add('show');
+    showNodeCounter('',0,`✅ Trip: ${Math.round(total).toLocaleString()} km · ${tripIds.length} cities`);
+  },200);
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  GLOBAL SEARCH
+// ═══════════════════════════════════════════════════════════════
+document.getElementById('globalSearch').addEventListener('input',function(){
+  const q=this.value.trim().toLowerCase();
+  if(!q)return;
+  const c=CITIES.find(x=>x.name.toLowerCase().includes(q));
+  if(c){map.setView([c.lat,c.lon],9,{animate:true});markers[c.id].openPopup();}
+});
+
+// ═══════════════════════════════════════════════════════════════
+//  TAB SWITCHING
+// ═══════════════════════════════════════════════════════════════
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>switchTab(t.dataset.tab)));
+function switchTab(name){
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab===name));
+  document.querySelectorAll('.panel').forEach(p=>p.classList.toggle('active',p.id===`panel-${name}`));
+}
+
+// ═══════════════════════════════════════════════════════════════
+//  POPUP ACTIONS
+// ═══════════════════════════════════════════════════════════════
+function setFrom(id){fromId=id;inpFrom.value=CITIES[id].name;map.closePopup();switchTab('dir');}
+function setTo(id){toId=id;inpTo.value=CITIES[id].name;map.closePopup();switchTab('dir');}
+
+// ═══════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════
+function showErr(id,msg){const el=document.getElementById(id);el.textContent='⚠ '+msg;el.classList.add('show');}
+
+let ncTimer;
+function showNodeCounter(algo,nodes,customMsg){
+  clearTimeout(ncTimer);
+  const el=document.getElementById('nodeCounter');
+  if(customMsg){el.textContent=customMsg;}
+  else{
+    const emoji={Dijkstra:'🔵','A★':'🟢',Bidirectional:'🟠'}[algo]||'⚡';
+    el.textContent=`${emoji} ${algo}: ${nodes} nodes explored`;
+  }
+  el.classList.add('show');
+  ncTimer=setTimeout(()=>el.classList.remove('show'),3000);
+}
+
+showNodeCounter('',0,'🗺 Click any city marker or use the search');
+</script>
+</body>
+</html>

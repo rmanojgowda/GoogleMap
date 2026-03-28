@@ -1,0 +1,6 @@
+D:/GoogleMap/build/CMakeFiles/gmap.dir
+D:/GoogleMap/build/CMakeFiles/gmap_tests.dir
+D:/GoogleMap/build/CMakeFiles/scale_test.dir
+D:/GoogleMap/build/CMakeFiles/test.dir
+D:/GoogleMap/build/CMakeFiles/edit_cache.dir
+D:/GoogleMap/build/CMakeFiles/rebuild_cache.dir

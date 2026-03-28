@@ -1,0 +1,16 @@
+GMap Scale Testing Report
+==========================
+Queries per scale : 200
+Min path length   : 3 cities
+
+Scale                 V       E       Dijk_avg    Astr_avg  BiDi_avg  Dijk_max    Astr_max  A*_save%    BiDi_save%  Mismatches
+------------------------------------------------------------------------------------------------------------------------
+Small (31 cities)     31      56      18          9         17        31          28        49.0        6.4         0/200
+Large (268 cities)    268     465     140         77        110       267         236       45.0        21.4        0/200
+
+INSIGHTS
+--------
+Graph grew       : 8.6x  (31 -> 268 cities)
+Dijkstra grew    : 7.5x in nodes explored
+A* grew          : 8.1x in nodes explored
+A* advantage     : 45.0% node reduction at largest scale

@@ -1,0 +1,1975 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GMap — India Road Network</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* ═══════════════════════════════════════════════════════
+   RESET & BASE
+═══════════════════════════════════════════════════════ */
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --blue: #1a73e8;
+            --blue-dark: #1557b0;
+            --blue-light: #e8f0fe;
+            --green: #0f9d58;
+            --red: #ea4335;
+            --yellow: #fbbc04;
+            --gray-50: #f8f9fa;
+            --gray-100: #f1f3f4;
+            --gray-200: #e8eaed;
+            --gray-300: #dadce0;
+            --gray-500: #9aa0a6;
+            --gray-700: #5f6368;
+            --gray-900: #202124;
+            --text: #3c4043;
+            --sidebar-w: 420px;
+            --shadow-sm: 0 1px 3px rgba(0, 0, 0, .12), 0 1px 2px rgba(0, 0, 0, .14);
+            --shadow-md: 0 4px 8px rgba(0, 0, 0, .12), 0 2px 4px rgba(0, 0, 0, .08);
+            --shadow-lg: 0 8px 24px rgba(0, 0, 0, .14), 0 4px 8px rgba(0, 0, 0, .08);
+            --radius: 8px;
+            --transition: all .2s cubic-bezier(.4, 0, .2, 1);
+        }
+
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Roboto', Arial, sans-serif;
+        }
+
+        /* ═══════════════════════════════════════════════════════
+   APP LAYOUT
+═══════════════════════════════════════════════════════ */
+        .app {
+            display: flex;
+            height: 100vh;
+            background: #e8edf2;
+        }
+
+        /* ═══════════════════════════════════════════════════════
+   SIDEBAR
+═══════════════════════════════════════════════════════ */
+        .sidebar {
+            width: var(--sidebar-w);
+            height: 100%;
+            background: #fff;
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            z-index: 10;
+            overflow: hidden;
+        }
+
+        /* Header */
+        .sidebar-header {
+            padding: 16px 16px 0;
+            background: #fff;
+            flex-shrink: 0;
+        }
+
+        .logo-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 14px;
+        }
+
+        .logo-icon {
+            width: 38px;
+            height: 38px;
+            background: var(--blue);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 2px 8px rgba(26, 115, 232, .4);
+        }
+
+        .logo-text {
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--gray-900);
+            letter-spacing: -.5px;
+        }
+
+        .logo-text span {
+            color: var(--blue);
+        }
+
+        .search-bar {
+            display: flex;
+            align-items: center;
+            background: var(--gray-100);
+            border-radius: 24px;
+            padding: 0 16px;
+            height: 48px;
+            gap: 10px;
+            border: 1.5px solid transparent;
+            transition: var(--transition);
+            margin-bottom: 4px;
+        }
+
+        .search-bar:focus-within {
+            background: #fff;
+            border-color: var(--blue);
+            box-shadow: 0 2px 10px rgba(26, 115, 232, .2);
+        }
+
+        .search-bar input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 15px;
+            color: var(--gray-900);
+            outline: none;
+            font-family: inherit;
+        }
+
+        .search-bar input::placeholder {
+            color: var(--gray-500);
+        }
+
+        .search-icon {
+            color: var(--gray-500);
+            font-size: 18px;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--gray-200);
+            margin-top: 12px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--gray-700);
+            text-align: center;
+            cursor: pointer;
+            border-bottom: 3px solid transparent;
+            transition: var(--transition);
+            letter-spacing: .25px;
+        }
+
+        .tab.active {
+            color: var(--blue);
+            border-bottom-color: var(--blue);
+        }
+
+        .tab:hover:not(.active) {
+            background: var(--gray-50);
+        }
+
+        /* Sidebar Body */
+        .sidebar-body {
+            flex: 1;
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: var(--gray-300) transparent;
+        }
+
+        .sidebar-body::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .sidebar-body::-webkit-scrollbar-thumb {
+            background: var(--gray-300);
+            border-radius: 4px;
+        }
+
+        /* Panels */
+        .panel {
+            display: none;
+            flex-direction: column;
+        }
+
+        .panel.active {
+            display: flex;
+        }
+
+        /* Direction Panel */
+        .dir-inputs {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .input-wrap {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--gray-100);
+            border-radius: 12px;
+            padding: 12px 14px;
+            border: 1.5px solid transparent;
+            transition: var(--transition);
+            cursor: pointer;
+            position: relative;
+        }
+
+        .input-wrap:focus-within {
+            background: #fff;
+            border-color: var(--blue);
+            box-shadow: 0 2px 8px rgba(26, 115, 232, .15);
+        }
+
+        .input-marker {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        .input-marker.a {
+            background: var(--green);
+            color: #fff;
+        }
+
+        .input-marker.b {
+            background: var(--red);
+            color: #fff;
+        }
+
+        .input-wrap input {
+            flex: 1;
+            border: none;
+            background: transparent;
+            font-size: 14px;
+            color: var(--gray-900);
+            outline: none;
+            font-family: inherit;
+        }
+
+        .input-wrap input::placeholder {
+            color: var(--gray-500);
+        }
+
+        .swap-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 1.5px solid var(--gray-300);
+            background: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            align-self: center;
+            margin-left: auto;
+            transition: var(--transition);
+        }
+
+        .swap-btn:hover {
+            background: var(--gray-100);
+            border-color: var(--blue);
+        }
+
+        .action-btn {
+            margin: 0 16px 16px;
+            padding: 14px;
+            background: var(--blue);
+            color: #fff;
+            border: none;
+            border-radius: 24px;
+            font-size: 14px;
+            font-weight: 500;
+            font-family: inherit;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: var(--transition);
+            letter-spacing: .25px;
+            box-shadow: 0 2px 8px rgba(26, 115, 232, .3);
+        }
+
+        .action-btn:hover {
+            background: var(--blue-dark);
+            box-shadow: 0 4px 12px rgba(26, 115, 232, .4);
+        }
+
+        .action-btn:active {
+            transform: scale(.98);
+        }
+
+        /* Autocomplete dropdown */
+        .autocomplete-list {
+            position: absolute;
+            top: calc(100% + 4px);
+            left: 0;
+            right: 0;
+            background: #fff;
+            border-radius: var(--radius);
+            box-shadow: var(--shadow-lg);
+            z-index: 100;
+            max-height: 200px;
+            overflow-y: auto;
+            display: none;
+        }
+
+        .autocomplete-list.show {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 10px 14px;
+            font-size: 13px;
+            color: var(--text);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background .12s;
+        }
+
+        .autocomplete-item:hover {
+            background: var(--gray-100);
+        }
+
+        .autocomplete-item .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--gray-500);
+        }
+
+        /* Result card */
+        .result-card {
+            margin: 0 16px 16px;
+            background: var(--blue-light);
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            border-left: 4px solid var(--blue);
+            display: none;
+        }
+
+        .result-card.show {
+            display: block;
+        }
+
+        .result-card .dist-big {
+            font-size: 24px;
+            font-weight: 600;
+            color: var(--blue);
+        }
+
+        .result-card .dist-label {
+            font-size: 12px;
+            color: var(--gray-700);
+            margin-bottom: 10px;
+        }
+
+        .result-card .route-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .step-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 6px 0;
+            position: relative;
+        }
+
+        .step-item:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 22px;
+            bottom: -6px;
+            width: 2px;
+            background: var(--blue);
+            opacity: .3;
+        }
+
+        .step-dot {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: var(--blue);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            margin-top: 1px;
+        }
+
+        .step-dot.start {
+            background: var(--green);
+        }
+
+        .step-dot.end {
+            background: var(--red);
+        }
+
+        .step-name {
+            font-size: 13px;
+            color: var(--gray-900);
+            line-height: 1.4;
+        }
+
+        .step-dist {
+            font-size: 11px;
+            color: var(--gray-500);
+            margin-left: auto;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+
+        /* Trip Panel */
+        .trip-cities-list {
+            padding: 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .trip-city-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: var(--gray-100);
+            border-radius: 10px;
+            padding: 10px 12px;
+        }
+
+        .trip-city-num {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background: var(--blue);
+            color: #fff;
+            font-size: 11px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .trip-city-name {
+            flex: 1;
+            font-size: 13px;
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        .trip-remove {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            border: none;
+            background: var(--gray-300);
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            color: var(--gray-700);
+        }
+
+        .trip-remove:hover {
+            background: var(--red);
+            color: #fff;
+        }
+
+        .add-city-row {
+            padding: 0 16px 12px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            position: relative;
+        }
+
+        .add-city-input {
+            flex: 1;
+            border: 1.5px solid var(--gray-300);
+            border-radius: 24px;
+            padding: 10px 14px;
+            font-size: 13px;
+            outline: none;
+            font-family: inherit;
+            transition: var(--transition);
+        }
+
+        .add-city-input:focus {
+            border-color: var(--blue);
+            box-shadow: 0 2px 8px rgba(26, 115, 232, .15);
+        }
+
+        .add-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: none;
+            background: var(--blue);
+            color: #fff;
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            box-shadow: 0 2px 6px rgba(26, 115, 232, .3);
+        }
+
+        .add-btn:hover {
+            background: var(--blue-dark);
+        }
+
+        .trip-result-card {
+            margin: 0 16px 16px;
+            background: #e6f4ea;
+            border-radius: var(--radius);
+            padding: 14px 16px;
+            border-left: 4px solid var(--green);
+            display: none;
+        }
+
+        .trip-result-card.show {
+            display: block;
+        }
+
+        .trip-result-card .total-dist {
+            font-size: 22px;
+            font-weight: 600;
+            color: var(--green);
+        }
+
+        .trip-stops-list {
+            margin-top: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+        }
+
+        .trip-stop {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            padding: 6px 0;
+            position: relative;
+        }
+
+        .trip-stop:not(:last-child)::after {
+            content: '';
+            position: absolute;
+            left: 10px;
+            top: 24px;
+            bottom: -4px;
+            width: 2px;
+            background: var(--green);
+            opacity: .35;
+        }
+
+        .trip-stop-num {
+            width: 22px;
+            height: 22px;
+            border-radius: 50%;
+            background: var(--green);
+            color: #fff;
+            font-size: 10px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .trip-stop-name {
+            font-size: 13px;
+            color: var(--text);
+        }
+
+        .trip-stop-badge {
+            font-size: 10px;
+            font-weight: 500;
+            color: var(--green);
+            background: rgba(15, 157, 88, .1);
+            padding: 2px 6px;
+            border-radius: 8px;
+            margin-left: 6px;
+        }
+
+        /* Sidebar footer */
+        .sidebar-footer {
+            padding: 10px 16px;
+            border-top: 1px solid var(--gray-200);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+            color: var(--gray-500);
+            flex-shrink: 0;
+        }
+
+        .algo-badge {
+            background: var(--blue-light);
+            color: var(--blue);
+            padding: 2px 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 500;
+        }
+
+        /* ═══════════════════════════════════════════════════════
+   MAP AREA
+═══════════════════════════════════════════════════════ */
+        .map-container {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+        }
+
+        #map {
+            width: 100%;
+            height: 100%;
+            background: #e8edf2;
+        }
+
+        /* Map tile-like background */
+        .map-grid line {
+            stroke: rgba(255, 255, 255, .5);
+            stroke-width: .5;
+        }
+
+        /* Roads */
+        .road-line {
+            stroke: #c0c8d8;
+            stroke-width: 2;
+            fill: none;
+            stroke-linecap: round;
+            transition: stroke .3s;
+        }
+
+        .road-line:hover {
+            stroke: #8899bb;
+        }
+
+        /* Route overlay */
+        .route-line {
+            stroke: var(--blue);
+            stroke-width: 5;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-dasharray: 2000;
+            stroke-dashoffset: 2000;
+            filter: drop-shadow(0 2px 4px rgba(26, 115, 232, .4));
+            transition: stroke-dashoffset 1.5s cubic-bezier(.4, 0, .2, 1);
+        }
+
+        .route-line.animate {
+            stroke-dashoffset: 0;
+        }
+
+        .trip-route-line {
+            stroke: var(--green);
+            stroke-width: 4;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+            stroke-dasharray: 5000;
+            stroke-dashoffset: 5000;
+            filter: drop-shadow(0 2px 4px rgba(15, 157, 88, .35));
+            transition: stroke-dashoffset 2s cubic-bezier(.4, 0, .2, 1);
+        }
+
+        .trip-route-line.animate {
+            stroke-dashoffset: 0;
+        }
+
+        /* City dots */
+        .city-dot {
+            cursor: pointer;
+            transition: r .15s, opacity .15s;
+        }
+
+        .city-dot circle.outer {
+            fill: #fff;
+            stroke: #93a5c8;
+            stroke-width: 1.5;
+            transition: all .15s;
+        }
+
+        .city-dot circle.inner {
+            fill: #4a6fa5;
+            transition: all .15s;
+        }
+
+        .city-dot:hover circle.outer {
+            stroke: var(--blue);
+            r: 10;
+        }
+
+        .city-dot:hover circle.inner {
+            fill: var(--blue);
+            r: 5;
+        }
+
+        .city-dot.selected circle.outer {
+            stroke: var(--blue);
+            fill: var(--blue-light);
+        }
+
+        .city-dot.selected circle.inner {
+            fill: var(--blue);
+        }
+
+        .city-dot.route-city circle.outer {
+            stroke: var(--blue);
+            fill: var(--blue);
+        }
+
+        .city-dot.route-city circle.inner {
+            fill: #fff;
+        }
+
+        /* Pin markers */
+        .pin-a,
+        .pin-b,
+        .pin-trip {
+            pointer-events: none;
+        }
+
+        .pin-a text {
+            fill: var(--green);
+            font-weight: 700;
+            font-size: 22px;
+        }
+
+        .pin-b text {
+            fill: var(--red);
+            font-weight: 700;
+            font-size: 22px;
+        }
+
+        .pin-trip text {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        /* City labels */
+        .city-label {
+            font-size: 11px;
+            font-weight: 500;
+            fill: var(--gray-700);
+            pointer-events: none;
+            font-family: 'Roboto', sans-serif;
+            text-shadow: 0 0 3px #fff, 0 0 6px #fff;
+            paint-order: stroke;
+            stroke: #fff;
+            stroke-width: 3;
+            stroke-linejoin: round;
+        }
+
+        /* Map controls */
+        .map-controls {
+            position: absolute;
+            right: 16px;
+            bottom: 48px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .map-ctrl-btn {
+            width: 40px;
+            height: 40px;
+            background: #fff;
+            border: none;
+            box-shadow: var(--shadow-md);
+            cursor: pointer;
+            font-size: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: var(--transition);
+            color: var(--gray-700);
+        }
+
+        .map-ctrl-btn:first-child {
+            border-radius: 8px 8px 0 0;
+        }
+
+        .map-ctrl-btn:last-child {
+            border-radius: 0 0 8px 8px;
+        }
+
+        .map-ctrl-btn:hover {
+            background: var(--gray-100);
+        }
+
+        /* Scale bar */
+        .map-scale {
+            position: absolute;
+            bottom: 16px;
+            right: 16px;
+            background: rgba(255, 255, 255, .85);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-size: 10px;
+            color: var(--gray-700);
+            font-weight: 500;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Tooltip */
+        .map-tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, .78);
+            color: #fff;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 500;
+            pointer-events: none;
+            transform: translate(-50%, -120%);
+            white-space: nowrap;
+            z-index: 20;
+            opacity: 0;
+            transition: opacity .15s;
+            font-family: 'Roboto', sans-serif;
+        }
+
+        .map-tooltip.show {
+            opacity: 1;
+        }
+
+        /* Notification */
+        .notification {
+            position: absolute;
+            top: 16px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--gray-900);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 24px;
+            font-size: 13px;
+            font-weight: 500;
+            z-index: 30;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity .3s;
+            white-space: nowrap;
+        }
+
+        .notification.show {
+            opacity: 1;
+        }
+
+        /* Loading spinner */
+        .spinner {
+            display: none;
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(26, 115, 232, .2);
+            border-top-color: var(--blue);
+            border-radius: 50%;
+            animation: spin .6s linear infinite;
+        }
+
+        .spinner.show {
+            display: block;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Error text */
+        .error-msg {
+            color: var(--red);
+            font-size: 12px;
+            padding: 0 16px 12px;
+            display: none;
+        }
+
+        .error-msg.show {
+            display: block;
+        }
+
+        /* Map attribution */
+        .attribution {
+            position: absolute;
+            bottom: 4px;
+            right: 8px;
+            font-size: 10px;
+            color: var(--gray-500);
+        }
+
+        /* Ocean background around India */
+        .ocean-bg {
+            fill: #c9d9e8;
+        }
+
+        .land-bg {
+            fill: #f5f0e8;
+        }
+
+        /* Minor animations */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(4px);
+            }
+
+            to {
+                opacity: 1;
+                transform: none;
+            }
+        }
+
+        .result-card.show,
+        .trip-result-card.show {
+            animation: fadeIn .3s ease-out;
+        }
+
+        /* City info popup on map */
+        .city-popup {
+            position: absolute;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: var(--shadow-lg);
+            padding: 10px 14px;
+            min-width: 160px;
+            z-index: 25;
+            display: none;
+            animation: fadeIn .15s ease-out;
+        }
+
+        .city-popup.show {
+            display: block;
+        }
+
+        .city-popup-name {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--gray-900);
+        }
+
+        .city-popup-actions {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+
+        .popup-btn {
+            flex: 1;
+            padding: 6px 8px;
+            border: none;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 500;
+            cursor: pointer;
+            font-family: inherit;
+            transition: var(--transition);
+        }
+
+        .popup-btn.from {
+            background: var(--green);
+            color: #fff;
+        }
+
+        .popup-btn.to {
+            background: var(--red);
+            color: #fff;
+        }
+
+        .popup-btn.trip {
+            background: var(--blue);
+            color: #fff;
+        }
+
+        .popup-btn:hover {
+            filter: brightness(.92);
+        }
+
+        /* India state boundaries (very light) */
+        .state-boundary {
+            fill: none;
+            stroke: rgba(180, 170, 155, .5);
+            stroke-width: .8;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app">
+
+        <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+        <div class="sidebar">
+
+            <div class="sidebar-header">
+                <div class="logo-row">
+                    <div class="logo-icon">🗺</div>
+                    <div class="logo-text">G<span>Map</span></div>
+                    <div class="spinner" id="spinner"></div>
+                </div>
+
+                <div class="search-bar">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="globalSearch" placeholder="Search cities in India..." autocomplete="off">
+                </div>
+
+                <div class="tabs">
+                    <div class="tab active" data-tab="directions">🚗 Directions</div>
+                    <div class="tab" data-tab="roadtrip">🗺 Road Trip</div>
+                </div>
+            </div>
+
+            <div class="sidebar-body">
+
+                <!-- ── DIRECTIONS PANEL ── -->
+                <div class="panel active" id="panel-directions">
+                    <div class="dir-inputs">
+                        <div class="input-wrap" id="wrap-from">
+                            <div class="input-marker a">A</div>
+                            <input type="text" id="input-from" placeholder="Choose starting city" autocomplete="off">
+                            <div class="autocomplete-list" id="ac-from"></div>
+                        </div>
+
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div style="flex:1; height:1px; background: var(--gray-200)"></div>
+                            <button class="swap-btn" id="swapBtn" title="Swap">⇅</button>
+                            <div style="flex:1; height:1px; background: var(--gray-200)"></div>
+                        </div>
+
+                        <div class="input-wrap" id="wrap-to">
+                            <div class="input-marker b">B</div>
+                            <input type="text" id="input-to" placeholder="Choose destination city" autocomplete="off">
+                            <div class="autocomplete-list" id="ac-to"></div>
+                        </div>
+                    </div>
+
+                    <div class="error-msg" id="dir-error"></div>
+
+                    <button class="action-btn" id="findRouteBtn">
+                        <span>🔍</span> Find Shortest Route
+                    </button>
+
+                    <div class="result-card" id="dir-result">
+                        <div class="dist-big" id="result-dist"></div>
+                        <div class="dist-label" id="result-label"></div>
+                        <div class="route-steps" id="route-steps"></div>
+                    </div>
+                </div>
+
+                <!-- ── ROAD TRIP PANEL ── -->
+                <div class="panel" id="panel-roadtrip">
+                    <div style="padding:14px 16px 0; font-size:13px; color:var(--gray-700); line-height:1.5;">
+                        Add cities you want to visit. GMap will find the most <strong>optimal order</strong> using
+                        Nearest-Neighbour + 2-opt.
+                    </div>
+
+                    <div class="add-city-row" style="margin-top:12px;">
+                        <input type="text" class="add-city-input" id="tripCityInput" placeholder="Add a city..."
+                            autocomplete="off">
+                        <button class="add-btn" id="addCityBtn">+</button>
+                        <div class="autocomplete-list" id="ac-trip" style="top:calc(100% - 4px);"></div>
+                    </div>
+
+                    <div class="trip-cities-list" id="tripCitiesList"></div>
+
+                    <div class="error-msg" id="trip-error"></div>
+
+                    <button class="action-btn" id="planTripBtn">
+                        <span>✈️</span> Plan Optimal Road Trip
+                    </button>
+
+                    <div class="trip-result-card" id="trip-result">
+                        <div style="font-size:12px; color:var(--green); font-weight:500; margin-bottom:4px;">OPTIMAL
+                            ROUTE FOUND</div>
+                        <div class="total-dist" id="trip-dist"></div>
+                        <div style="font-size:12px; color:var(--gray-700); margin-bottom:12px;" id="trip-cities-count">
+                        </div>
+                        <div class="trip-stops-list" id="trip-stops"></div>
+                        <div style="margin-top:10px; font-size:11px; color:var(--gray-500);">
+                            🧠 Algorithm: Nearest-Neighbour + 2-opt local search
+                        </div>
+                    </div>
+                </div>
+
+            </div><!-- sidebar-body -->
+
+            <div class="sidebar-footer">
+                <span>⚡ Powered by</span>
+                <span class="algo-badge">Dijkstra</span>
+                <span class="algo-badge">TSP 2-opt</span>
+                <span style="margin-left:auto; font-size:10px;">India • 31 cities • 56 roads</span>
+            </div>
+        </div><!-- sidebar -->
+
+        <!-- ═══════════════════ MAP ═══════════════════ -->
+        <div class="map-container" id="mapContainer">
+            <svg id="map" viewBox="0 0 900 780" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                    <filter id="glow">
+                        <feGaussianBlur stdDeviation="3" result="blur" />
+                        <feMerge>
+                            <feMergeNode in="blur" />
+                            <feMergeNode in="SourceGraphic" />
+                        </feMerge>
+                    </filter>
+                    <radialGradient id="mapGrad" cx="50%" cy="50%" r="70%">
+                        <stop offset="0%" stop-color="#eef2f7" />
+                        <stop offset="100%" stop-color="#dde4ee" />
+                    </radialGradient>
+                </defs>
+
+                <!-- Ocean background -->
+                <rect width="900" height="780" fill="url(#mapGrad)" />
+
+                <!-- Subtle grid (map tiles feel) -->
+                <g id="gridLines" opacity="0.4">
+                    <line x1="0" y1="130" x2="900" y2="130" stroke="#c5cde0" stroke-width=".5" />
+                    <line x1="0" y1="260" x2="900" y2="260" stroke="#c5cde0" stroke-width=".5" />
+                    <line x1="0" y1="390" x2="900" y2="390" stroke="#c5cde0" stroke-width=".5" />
+                    <line x1="0" y1="520" x2="900" y2="520" stroke="#c5cde0" stroke-width=".5" />
+                    <line x1="0" y1="650" x2="900" y2="650" stroke="#c5cde0" stroke-width=".5" />
+                    <line x1="150" y1="0" x2="150" y2="780" stroke="#c5cde0" stroke-width=".5" />
+                    <line x1="300" y1="0" x2="300" y2="780" stroke="#c5cde0" stroke-width=".5" />
+                    <line x1="450" y1="0" x2="450" y2="780" stroke="#c5cde0" stroke-width=".5" />
+                    <line x1="600" y1="0" x2="600" y2="780" stroke="#c5cde0" stroke-width=".5" />
+                    <line x1="750" y1="0" x2="750" y2="780" stroke="#c5cde0" stroke-width=".5" />
+                </g>
+
+                <!-- India land shape (simplified) -->
+                <path id="india-shape" d="
+        M 180,30 L 250,20 L 320,15 L 400,22 L 480,18 L 560,30 L 640,25 L 720,40 L 780,55
+        L 800,80 L 790,120 L 810,150 L 800,180 L 820,210 L 800,240 L 780,260 L 790,290
+        L 760,310 L 740,340 L 760,370 L 750,400 L 720,420 L 700,450 L 680,480 L 660,510
+        L 640,540 L 610,560 L 580,580 L 550,610 L 510,640 L 470,660 L 430,680 L 400,700
+        L 370,690 L 340,670 L 310,650 L 280,620 L 250,590 L 220,560 L 195,530 L 175,500
+        L 155,470 L 140,440 L 130,410 L 120,380 L 115,350 L 110,320 L 105,290 L 100,260
+        L 95,230  L 100,200 L 105,170 L 110,140 L 120,110 L 140,80  L 160,55  Z
+      " fill="#f0ebe0" stroke="#d4cbbf" stroke-width="1.5" opacity="0.7" />
+
+                <!-- Roads layer -->
+                <g id="roads-layer"></g>
+
+                <!-- Route overlay -->
+                <g id="route-layer"></g>
+
+                <!-- Trip route overlay -->
+                <g id="trip-layer"></g>
+
+                <!-- Cities layer -->
+                <g id="cities-layer"></g>
+
+                <!-- Labels layer -->
+                <g id="labels-layer"></g>
+
+                <!-- Pins layer -->
+                <g id="pins-layer"></g>
+
+                <!-- Compass rose -->
+                <g transform="translate(850,50)">
+                    <circle cx="0" cy="0" r="22" fill="white" opacity=".9" filter="url(#glow)" />
+                    <text x="0" y="-8" text-anchor="middle" font-size="9" fill="#555" font-family="Roboto">N</text>
+                    <polygon points="0,-16 3,-4 0,-8 -3,-4" fill="#ea4335" />
+                    <polygon points="0,16 3,4 0,8 -3,4" fill="#aaa" />
+                    <circle cx="0" cy="0" r="3" fill="white" stroke="#888" stroke-width="1" />
+                </g>
+            </svg>
+
+            <!-- Map controls -->
+            <div class="map-controls">
+                <button class="map-ctrl-btn" id="zoomIn" title="Zoom in">+</button>
+                <button class="map-ctrl-btn" id="zoomOut" title="Zoom out">−</button>
+            </div>
+
+            <div class="map-scale">≈ 500 km</div>
+
+            <!-- Tooltip -->
+            <div class="map-tooltip" id="mapTooltip"></div>
+
+            <!-- City popup -->
+            <div class="city-popup" id="cityPopup">
+                <div class="city-popup-name" id="popupName"></div>
+                <div class="city-popup-actions">
+                    <button class="popup-btn from" onclick="setFrom(currentPopupCity)">📍 From</button>
+                    <button class="popup-btn to" onclick="setTo(currentPopupCity)">🏁 To</button>
+                    <button class="popup-btn trip" onclick="addToTrip(currentPopupCity)">➕ Trip</button>
+                </div>
+            </div>
+
+            <!-- Notification -->
+            <div class="notification" id="notification"></div>
+
+            <div class="attribution">GMap • India Road Network</div>
+        </div>
+
+    </div><!-- app -->
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════
+        //  DATA: 31 cities, 56 roads
+        // ═══════════════════════════════════════════════════════════════
+
+        const CITIES = [
+            { id: 0, name: "Bengaluru", lat: 12.97, lon: 77.59 },
+            { id: 1, name: "Chennai", lat: 13.08, lon: 80.27 },
+            { id: 2, name: "Hyderabad", lat: 17.38, lon: 78.48 },
+            { id: 3, name: "Kochi", lat: 9.93, lon: 76.27 },
+            { id: 4, name: "Mysuru", lat: 12.29, lon: 76.64 },
+            { id: 5, name: "Mangaluru", lat: 12.86, lon: 74.84 },
+            { id: 6, name: "Coimbatore", lat: 11.00, lon: 76.96 },
+            { id: 7, name: "Visakhapatnam", lat: 17.69, lon: 83.21 },
+            { id: 8, name: "Madurai", lat: 9.92, lon: 78.12 },
+            { id: 9, name: "Vijayawada", lat: 16.50, lon: 80.62 },
+            { id: 10, name: "Mumbai", lat: 19.08, lon: 72.88 },
+            { id: 11, name: "Pune", lat: 18.52, lon: 73.86 },
+            { id: 12, name: "Ahmedabad", lat: 23.03, lon: 72.57 },
+            { id: 13, name: "Surat", lat: 21.17, lon: 72.83 },
+            { id: 14, name: "Nagpur", lat: 21.14, lon: 79.09 },
+            { id: 15, name: "Goa", lat: 15.49, lon: 73.82 },
+            { id: 16, name: "Delhi", lat: 28.61, lon: 77.20 },
+            { id: 17, name: "Jaipur", lat: 26.91, lon: 75.79 },
+            { id: 18, name: "Agra", lat: 27.18, lon: 78.01 },
+            { id: 19, name: "Lucknow", lat: 26.85, lon: 80.95 },
+            { id: 20, name: "Varanasi", lat: 25.32, lon: 82.97 },
+            { id: 21, name: "Chandigarh", lat: 30.74, lon: 76.79 },
+            { id: 22, name: "Amritsar", lat: 31.63, lon: 74.87 },
+            { id: 23, name: "Kanpur", lat: 26.45, lon: 80.35 },
+            { id: 24, name: "Kolkata", lat: 22.57, lon: 88.36 },
+            { id: 25, name: "Bhubaneswar", lat: 20.30, lon: 85.82 },
+            { id: 26, name: "Patna", lat: 25.60, lon: 85.14 },
+            { id: 27, name: "Bhopal", lat: 23.26, lon: 77.40 },
+            { id: 28, name: "Indore", lat: 22.72, lon: 75.86 },
+            { id: 29, name: "Raipur", lat: 21.25, lon: 81.63 },
+            { id: 30, name: "Guwahati", lat: 26.14, lon: 91.74 },
+        ];
+
+        const ROADS = [
+            [0, 1, 346], [0, 2, 570], [0, 4, 143], [0, 5, 352], [0, 6, 366], [0, 3, 566],
+            [1, 6, 498], [1, 8, 462], [1, 9, 435], [1, 7, 791],
+            [2, 9, 275], [2, 7, 625], [2, 14, 500], [2, 11, 564],
+            [3, 6, 183], [3, 8, 246], [4, 6, 215], [5, 15, 381], [5, 3, 325], [6, 8, 213],
+            [9, 7, 347], [15, 11, 456], [15, 10, 590], [14, 11, 738],
+            [10, 11, 155], [10, 13, 290], [10, 14, 900], [11, 14, 738],
+            [13, 12, 272], [12, 17, 673], [12, 28, 397], [14, 29, 296], [14, 27, 360],
+            [17, 16, 281], [17, 18, 240], [27, 28, 195], [27, 16, 778], [28, 10, 585],
+            [16, 18, 233], [16, 21, 245], [16, 19, 555], [16, 23, 490],
+            [21, 22, 237], [18, 19, 363], [18, 23, 296], [19, 20, 330], [19, 23, 82],
+            [23, 20, 335], [20, 26, 292], [24, 25, 473], [24, 26, 596], [24, 30, 1031],
+            [25, 7, 450], [25, 29, 499], [26, 20, 292], [29, 24, 700],
+        ];
+
+        const INF = Infinity;
+        const N = CITIES.length;
+
+        // ═══════════════════════════════════════════════════════════════
+        //  MAP PROJECTION: lat/lon → SVG coords
+        // ═══════════════════════════════════════════════════════════════
+        // India bounds with padding
+        const LAT_MIN = 7, LAT_MAX = 34, LON_MIN = 68, LON_MAX = 97;
+        const SVG_W = 900, SVG_H = 780, PAD = 30;
+
+        function project(lat, lon) {
+            const x = PAD + (lon - LON_MIN) / (LON_MAX - LON_MIN) * (SVG_W - PAD * 2);
+            const y = PAD + (1 - (lat - LAT_MIN) / (LAT_MAX - LAT_MIN)) * (SVG_H - PAD * 2);
+            return { x, y };
+        }
+
+        // Precompute positions
+        const POS = CITIES.map(c => project(c.lat, c.lon));
+
+        // ═══════════════════════════════════════════════════════════════
+        //  BUILD ADJACENCY LIST
+        // ═══════════════════════════════════════════════════════════════
+        const adj = Array.from({ length: N }, () => []);
+        ROADS.forEach(([u, v, d]) => {
+            adj[u].push({ to: v, dist: d });
+            adj[v].push({ to: u, dist: d });
+        });
+
+        // ═══════════════════════════════════════════════════════════════
+        //  DIJKSTRA (Min-heap via sorted array — fast enough for N=31)
+        // ═══════════════════════════════════════════════════════════════
+        function dijkstra(src, dst) {
+            const dist = new Array(N).fill(INF);
+            const parent = new Array(N).fill(-1);
+            const visited = new Array(N).fill(false);
+            dist[src] = 0;
+
+            // Simple priority queue (array with sort) — N=31 is tiny
+            const pq = [[0, src]];
+
+            while (pq.length > 0) {
+                pq.sort((a, b) => a[0] - b[0]);
+                const [d, u] = pq.shift();
+                if (visited[u]) continue;
+                visited[u] = true;
+                if (u === dst) break;
+
+                for (const { to, dist: w } of adj[u]) {
+                    const nd = dist[u] + w;
+                    if (nd < dist[to]) {
+                        dist[to] = nd;
+                        parent[to] = u;
+                        pq.push([nd, to]);
+                    }
+                }
+            }
+
+            if (dist[dst] === INF) return null;
+
+            // Reconstruct path
+            const path = [];
+            for (let cur = dst; cur !== -1; cur = parent[cur]) path.unshift(cur);
+            return { dist: dist[dst], path };
+        }
+
+        // All-pairs shortest path for a subset
+        function allPairs(subset) {
+            const n = subset.length;
+            const mat = Array.from({ length: n }, () => new Array(n).fill(INF));
+            const paths = Array.from({ length: n }, () => []);
+            for (let i = 0; i < n; i++) {
+                mat[i][i] = 0;
+                for (let j = i + 1; j < n; j++) {
+                    const r = dijkstra(subset[i], subset[j]);
+                    if (r) {
+                        mat[i][j] = mat[j][i] = r.dist;
+                        paths[i][j] = paths[j][i] = r.path;
+                    }
+                }
+            }
+            return { mat, paths };
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  TSP: Nearest Neighbour + 2-opt
+        // ═══════════════════════════════════════════════════════════════
+        function nearestNeighbour(n, mat) {
+            const visited = new Array(n).fill(false);
+            const tour = [0];
+            visited[0] = true;
+            for (let s = 1; s < n; s++) {
+                let cur = tour[tour.length - 1], best = -1, bestD = INF;
+                for (let j = 0; j < n; j++) {
+                    if (!visited[j] && mat[cur][j] < bestD) { bestD = mat[cur][j]; best = j; }
+                }
+                if (best === -1) break;
+                tour.push(best); visited[best] = true;
+            }
+            tour.push(tour[0]);
+            return tour;
+        }
+
+        function tourDist(tour, mat) {
+            let d = 0;
+            for (let i = 0; i < tour.length - 1; i++) d += mat[tour[i]][tour[i + 1]];
+            return d;
+        }
+
+        function twoOpt(tour, mat) {
+            const n = tour.length - 1;
+            let improved = true;
+            while (improved) {
+                improved = false;
+                for (let i = 0; i < n - 1; i++) {
+                    for (let j = i + 2; j < n; j++) {
+                        if (i === 0 && j === n - 1) continue;
+                        const before = mat[tour[i]][tour[i + 1]] + mat[tour[j]][tour[j + 1]];
+                        const after = mat[tour[i]][tour[j]] + mat[tour[i + 1]][tour[j + 1]];
+                        if (after < before - 1e-9) {
+                            // reverse i+1..j
+                            let l = i + 1, r = j;
+                            while (l < r) { [tour[l], tour[r]] = [tour[r], tour[l]]; l++; r--; }
+                            improved = true;
+                        }
+                    }
+                }
+            }
+            return tour;
+        }
+
+        function planTrip(cityIds) {
+            const n = cityIds.length;
+            const { mat, paths } = allPairs(cityIds);
+            let tour = nearestNeighbour(n, mat);
+            tour = twoOpt(tour, mat);
+            const total = tourDist(tour, mat);
+            return { tour: tour.map(i => cityIds[i]), total, mat, paths };
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  SVG RENDERING
+        // ═══════════════════════════════════════════════════════════════
+        const svg = document.getElementById('map');
+        const roadsLayer = document.getElementById('roads-layer');
+        const routeLayer = document.getElementById('route-layer');
+        const tripLayer = document.getElementById('trip-layer');
+        const citiesLayer = document.getElementById('cities-layer');
+        const labelsLayer = document.getElementById('labels-layer');
+        const pinsLayer = document.getElementById('pins-layer');
+
+        function svgEl(tag, attrs = {}) {
+            const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+            for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
+            return el;
+        }
+
+        // Draw all roads
+        function drawRoads() {
+            roadsLayer.innerHTML = '';
+            ROADS.forEach(([u, v]) => {
+                const p1 = POS[u], p2 = POS[v];
+                const line = svgEl('line', {
+                    x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y,
+                    class: 'road-line'
+                });
+                roadsLayer.appendChild(line);
+            });
+        }
+
+        // Draw all city dots
+        const cityDotEls = {};
+        function drawCities() {
+            citiesLayer.innerHTML = '';
+            labelsLayer.innerHTML = '';
+            CITIES.forEach(c => {
+                const { x, y } = POS[c.id];
+                const g = svgEl('g', { class: 'city-dot', 'data-id': c.id });
+
+                // Outer ring
+                const outer = svgEl('circle', { cx: x, cy: y, r: 8, class: 'outer' });
+                const inner = svgEl('circle', { cx: x, cy: y, r: 4, class: 'inner' });
+                g.appendChild(outer);
+                g.appendChild(inner);
+
+                g.addEventListener('click', e => { e.stopPropagation(); showCityPopup(c.id, x, y); });
+                g.addEventListener('mouseenter', () => showTooltip(c.name, x, y));
+                g.addEventListener('mouseleave', hideTooltip);
+
+                citiesLayer.appendChild(g);
+                cityDotEls[c.id] = g;
+
+                // Label (offset to avoid overlap)
+                const lx = x + (x > SVG_W / 2 ? -9 : 9);
+                const anchor = x > SVG_W / 2 ? 'end' : 'start';
+                const label = svgEl('text', {
+                    x: lx, y: y + 4,
+                    class: 'city-label',
+                    'text-anchor': anchor
+                });
+                label.textContent = c.name;
+                labelsLayer.appendChild(label);
+            });
+        }
+
+        function clearCityStyles() {
+            Object.values(cityDotEls).forEach(g => {
+                g.classList.remove('selected', 'route-city');
+            });
+        }
+
+        // Draw Dijkstra route
+        function drawRoute(path) {
+            routeLayer.innerHTML = '';
+            if (!path || path.length < 2) return;
+
+            // Highlighted cities
+            clearCityStyles();
+            path.forEach(id => cityDotEls[id]?.classList.add('route-city'));
+
+            // Animated path line
+            const pts = path.map(id => `${POS[id].x},${POS[id].y}`).join(' ');
+            const polyline = svgEl('polyline', {
+                points: pts,
+                class: 'route-line'
+            });
+            const totalLen = pathLength(path);
+            polyline.style.strokeDasharray = totalLen;
+            polyline.style.strokeDashoffset = totalLen;
+            routeLayer.appendChild(polyline);
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => polyline.classList.add('animate'));
+            });
+
+            // Draw pins A and B
+            drawPin(path[0], 'A', '#0f9d58');
+            drawPin(path[path.length - 1], 'B', '#ea4335');
+        }
+
+        function drawTripRoute(tour) {
+            tripLayer.innerHTML = '';
+            if (!tour || tour.length < 2) return;
+
+            clearCityStyles();
+            tour.forEach(id => cityDotEls[id]?.classList.add('route-city'));
+
+            const pts = tour.map(id => `${POS[id].x},${POS[id].y}`).join(' ');
+            const polyline = svgEl('polyline', {
+                points: pts,
+                class: 'trip-route-line'
+            });
+            const totalLen = pathLength(tour) * 1.2;
+            polyline.style.strokeDasharray = totalLen;
+            polyline.style.strokeDashoffset = totalLen;
+            tripLayer.appendChild(polyline);
+            requestAnimationFrame(() => {
+                requestAnimationFrame(() => polyline.classList.add('animate'));
+            });
+
+            // Number pins for each stop
+            const unique = tour.slice(0, -1); // remove duplicate last=first
+            unique.forEach((id, idx) => {
+                const { x, y } = POS[id];
+                const g = svgEl('g');
+                const circle = svgEl('circle', { cx: x, cy: y - 18, r: 10, fill: '#0f9d58' });
+                const text = svgEl('text', {
+                    x, y: y - 14,
+                    'text-anchor': 'middle',
+                    fill: 'white',
+                    'font-size': '10',
+                    'font-weight': '700',
+                    'font-family': 'Roboto'
+                });
+                text.textContent = idx + 1;
+                g.appendChild(circle);
+                g.appendChild(text);
+                pinsLayer.appendChild(g);
+            });
+        }
+
+        function drawPin(cityId, label, color) {
+            const { x, y } = POS[cityId];
+            const g = svgEl('g');
+
+            // Pin drop shape
+            const circle = svgEl('circle', { cx: x, cy: y - 22, r: 12, fill: color, stroke: 'white', 'stroke-width': '2' });
+            const text = svgEl('text', {
+                x, y: y - 17,
+                'text-anchor': 'middle',
+                fill: 'white',
+                'font-size': '11',
+                'font-weight': '700',
+                'font-family': 'Roboto'
+            });
+            text.textContent = label;
+
+            const stem = svgEl('line', { x1: x, y1: y - 10, x2: x, y2: y, stroke: color, 'stroke-width': '3', 'stroke-linecap': 'round' });
+            g.appendChild(stem);
+            g.appendChild(circle);
+            g.appendChild(text);
+            pinsLayer.appendChild(g);
+        }
+
+        function pathLength(ids) {
+            let len = 0;
+            for (let i = 0; i < ids.length - 1; i++) {
+                const dx = POS[ids[i]].x - POS[ids[i + 1]].x;
+                const dy = POS[ids[i]].y - POS[ids[i + 1]].y;
+                len += Math.sqrt(dx * dx + dy * dy);
+            }
+            return len + 200;
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  TOOLTIP & POPUP
+        // ═══════════════════════════════════════════════════════════════
+        const tooltip = document.getElementById('mapTooltip');
+        const cityPopup = document.getElementById('cityPopup');
+        const popupName = document.getElementById('popupName');
+        let currentPopupCity = -1;
+
+        function showTooltip(name, svgX, svgY) {
+            // Convert SVG coords to screen coords
+            const mapRect = document.getElementById('map').getBoundingClientRect();
+            const scaleX = mapRect.width / SVG_W;
+            const scaleY = mapRect.height / SVG_H;
+            tooltip.style.left = (mapRect.left - document.getElementById('mapContainer').getBoundingClientRect().left + svgX * scaleX) + 'px';
+            tooltip.style.top = (svgY * scaleY - 20) + 'px';
+            tooltip.textContent = name;
+            tooltip.classList.add('show');
+        }
+        function hideTooltip() { tooltip.classList.remove('show'); }
+
+        function showCityPopup(cityId, svgX, svgY) {
+            currentPopupCity = cityId;
+            const mapRect = document.getElementById('mapContainer').getBoundingClientRect();
+            const svgRect = document.getElementById('map').getBoundingClientRect();
+            const scaleX = svgRect.width / SVG_W;
+            const scaleY = svgRect.height / SVG_H;
+            const px = svgX * scaleX;
+            const py = svgY * scaleY;
+
+            popupName.textContent = CITIES[cityId].name;
+            cityPopup.style.left = Math.min(px + 12, mapRect.width - 180) + 'px';
+            cityPopup.style.top = Math.max(py - 80, 10) + 'px';
+            cityPopup.classList.add('show');
+        }
+
+        document.addEventListener('click', e => {
+            if (!cityPopup.contains(e.target)) cityPopup.classList.remove('show');
+        });
+
+        // ═══════════════════════════════════════════════════════════════
+        //  AUTOCOMPLETE
+        // ═══════════════════════════════════════════════════════════════
+        function setupAutocomplete(inputEl, listEl, onSelect) {
+            inputEl.addEventListener('input', () => {
+                const q = inputEl.value.trim().toLowerCase();
+                listEl.innerHTML = '';
+                if (!q) { listEl.classList.remove('show'); return; }
+                const matches = CITIES.filter(c => c.name.toLowerCase().includes(q)).slice(0, 8);
+                if (!matches.length) { listEl.classList.remove('show'); return; }
+                matches.forEach(c => {
+                    const item = document.createElement('div');
+                    item.className = 'autocomplete-item';
+                    item.innerHTML = `<div class="dot"></div>${c.name}`;
+                    item.addEventListener('mousedown', e => {
+                        e.preventDefault();
+                        inputEl.value = c.name;
+                        listEl.classList.remove('show');
+                        onSelect(c.id);
+                    });
+                    listEl.appendChild(item);
+                });
+                listEl.classList.add('show');
+            });
+            inputEl.addEventListener('blur', () => setTimeout(() => listEl.classList.remove('show'), 150));
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  DIRECTIONS FEATURE
+        // ═══════════════════════════════════════════════════════════════
+        let fromId = -1, toId = -1;
+
+        const inputFrom = document.getElementById('input-from');
+        const inputTo = document.getElementById('input-to');
+        const acFrom = document.getElementById('ac-from');
+        const acTo = document.getElementById('ac-to');
+        const dirError = document.getElementById('dir-error');
+        const dirResult = document.getElementById('dir-result');
+        const resultDist = document.getElementById('result-dist');
+        const resultLabel = document.getElementById('result-label');
+        const routeSteps = document.getElementById('route-steps');
+        const spinner = document.getElementById('spinner');
+
+        setupAutocomplete(inputFrom, acFrom, id => { fromId = id; dirError.classList.remove('show'); });
+        setupAutocomplete(inputTo, acTo, id => { toId = id; dirError.classList.remove('show'); });
+
+        document.getElementById('swapBtn').addEventListener('click', () => {
+            [fromId, toId] = [toId, fromId];
+            [inputFrom.value, inputTo.value] = [inputTo.value, inputFrom.value];
+        });
+
+        function setFrom(cityId) {
+            fromId = cityId;
+            inputFrom.value = CITIES[cityId].name;
+            cityPopup.classList.remove('show');
+            switchTab('directions');
+            showNotif(`Set as starting point: ${CITIES[cityId].name}`);
+        }
+        function setTo(cityId) {
+            toId = cityId;
+            inputTo.value = CITIES[cityId].name;
+            cityPopup.classList.remove('show');
+            switchTab('directions');
+            showNotif(`Set as destination: ${CITIES[cityId].name}`);
+        }
+
+        document.getElementById('findRouteBtn').addEventListener('click', findRoute);
+        inputFrom.addEventListener('keydown', e => e.key === 'Enter' && findRoute());
+        inputTo.addEventListener('keydown', e => e.key === 'Enter' && findRoute());
+
+        function findRoute() {
+            // Try to resolve city names if IDs not set
+            if (fromId === -1) {
+                const match = CITIES.find(c => c.name.toLowerCase() === inputFrom.value.trim().toLowerCase());
+                if (match) fromId = match.id;
+            }
+            if (toId === -1) {
+                const match = CITIES.find(c => c.name.toLowerCase() === inputTo.value.trim().toLowerCase());
+                if (match) toId = match.id;
+            }
+
+            if (fromId === -1 || toId === -1) {
+                showError(dirError, 'Please select valid cities from the list.');
+                return;
+            }
+            if (fromId === toId) {
+                showError(dirError, 'Start and destination must be different cities.');
+                return;
+            }
+
+            spinner.classList.add('show');
+            dirError.classList.remove('show');
+            dirResult.classList.remove('show');
+            routeLayer.innerHTML = '';
+            tripLayer.innerHTML = '';
+            pinsLayer.innerHTML = '';
+
+            setTimeout(() => {
+                const result = dijkstra(fromId, toId);
+                spinner.classList.remove('show');
+
+                if (!result) {
+                    showError(dirError, 'No road connection found between these cities.');
+                    return;
+                }
+
+                // Render route on map
+                drawRoute(result.path);
+
+                // Populate result card
+                resultDist.textContent = `${result.dist.toLocaleString()} km`;
+                resultLabel.textContent =
+                    `${CITIES[fromId].name} → ${CITIES[toId].name} • ${result.path.length} stops`;
+
+                routeSteps.innerHTML = '';
+                result.path.forEach((id, idx) => {
+                    const isFirst = idx === 0, isLast = idx === result.path.length - 1;
+                    const div = document.createElement('div');
+                    div.className = 'step-item';
+
+                    let dotClass = 'step-dot';
+                    let dotLabel = idx + 1;
+                    if (isFirst) { dotClass += ' start'; dotLabel = 'A'; }
+                    if (isLast) { dotClass += ' end'; dotLabel = 'B'; }
+
+                    // Segment distance to next
+                    let segDist = '';
+                    if (!isLast) {
+                        const nextId = result.path[idx + 1];
+                        const edge = ROADS.find(([u, v]) => (u === id && v === nextId) || (v === id && u === nextId));
+                        if (edge) segDist = `${edge[2]} km`;
+                    }
+
+                    div.innerHTML = `
+        <div class="${dotClass}">${dotLabel}</div>
+        <div class="step-name">${CITIES[id].name}</div>
+        ${segDist ? `<div class="step-dist">→ ${segDist}</div>` : ''}
+      `;
+                    routeSteps.appendChild(div);
+                });
+
+                dirResult.classList.add('show');
+            }, 200);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  ROAD TRIP FEATURE
+        // ═══════════════════════════════════════════════════════════════
+        let tripCities = [];
+        const tripCitiesList = document.getElementById('tripCitiesList');
+        const tripCityInput = document.getElementById('tripCityInput');
+        const acTrip = document.getElementById('ac-trip');
+        const tripError = document.getElementById('trip-error');
+        const tripResult = document.getElementById('trip-result');
+        const tripDistEl = document.getElementById('trip-dist');
+        const tripCitiesCount = document.getElementById('trip-cities-count');
+        const tripStops = document.getElementById('trip-stops');
+
+        setupAutocomplete(tripCityInput, acTrip, id => addToTrip(id));
+
+        document.getElementById('addCityBtn').addEventListener('click', () => {
+            const match = CITIES.find(c => c.name.toLowerCase() === tripCityInput.value.trim().toLowerCase());
+            if (match) addToTrip(match.id);
+            else showError(tripError, `City "${tripCityInput.value.trim()}" not found.`);
+        });
+
+        tripCityInput.addEventListener('keydown', e => {
+            if (e.key === 'Enter') document.getElementById('addCityBtn').click();
+        });
+
+        function addToTrip(cityId) {
+            if (tripCities.includes(cityId)) { showNotif(`${CITIES[cityId].name} already added`); return; }
+            tripCities.push(cityId);
+            tripCityInput.value = '';
+            acTrip.classList.remove('show');
+            tripError.classList.remove('show');
+            renderTripList();
+            switchTab('roadtrip');
+            showNotif(`✓ Added: ${CITIES[cityId].name}`);
+        }
+
+        function renderTripList() {
+            tripCitiesList.innerHTML = '';
+            tripCities.forEach((id, idx) => {
+                const div = document.createElement('div');
+                div.className = 'trip-city-item';
+                div.innerHTML = `
+      <div class="trip-city-num">${idx + 1}</div>
+      <div class="trip-city-name">${CITIES[id].name}</div>
+      <button class="trip-remove" onclick="removeFromTrip(${idx})">×</button>
+    `;
+                tripCitiesList.appendChild(div);
+            });
+        }
+
+        function removeFromTrip(idx) {
+            tripCities.splice(idx, 1);
+            renderTripList();
+        }
+
+        document.getElementById('planTripBtn').addEventListener('click', () => {
+            if (tripCities.length < 2) {
+                showError(tripError, 'Please add at least 2 cities for a road trip.');
+                return;
+            }
+            tripError.classList.remove('show');
+            spinner.classList.add('show');
+            routeLayer.innerHTML = '';
+            tripLayer.innerHTML = '';
+            pinsLayer.innerHTML = '';
+            tripResult.classList.remove('show');
+
+            setTimeout(() => {
+                const result = planTrip([...tripCities]);
+                spinner.classList.remove('show');
+
+                // Draw on map
+                drawTripRoute(result.tour);
+
+                // Fill result card
+                tripDistEl.textContent = `${Math.round(result.total).toLocaleString()} km`;
+                tripCitiesCount.textContent =
+                    `${tripCities.length} cities • Round trip starting from ${CITIES[result.tour[0]].name}`;
+
+                tripStops.innerHTML = '';
+                result.tour.forEach((id, idx) => {
+                    const isLast = idx === result.tour.length - 1;
+                    const div = document.createElement('div');
+                    div.className = 'trip-stop';
+                    const badge = (idx === 0 || isLast) ?
+                        `<span class="trip-stop-badge">${idx === 0 ? 'Start' : 'Return'}</span>` : '';
+                    div.innerHTML = `
+        <div class="trip-stop-num" style="background:${isLast ? '#34a853' : '#1a73e8'}">${isLast ? '↩' : (idx + 1)}</div>
+        <div class="trip-stop-name">${CITIES[id].name}${badge}</div>
+      `;
+                    tripStops.appendChild(div);
+                });
+
+                tripResult.classList.add('show');
+            }, 300);
+        });
+
+        // ═══════════════════════════════════════════════════════════════
+        //  TAB SWITCHING
+        // ═══════════════════════════════════════════════════════════════
+        document.querySelectorAll('.tab').forEach(tab => {
+            tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+        });
+
+        function switchTab(name) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+            document.querySelectorAll('.panel').forEach(p => p.classList.toggle('active', p.id === `panel-${name}`));
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  GLOBAL SEARCH BAR
+        // ═══════════════════════════════════════════════════════════════
+        const globalSearch = document.getElementById('globalSearch');
+        globalSearch.addEventListener('input', () => {
+            const q = globalSearch.value.trim().toLowerCase();
+            if (!q) { clearCityStyles(); return; }
+            Object.keys(cityDotEls).forEach(id => {
+                const name = CITIES[id].name.toLowerCase();
+                if (name.includes(q)) cityDotEls[id].classList.add('selected');
+                else cityDotEls[id].classList.remove('selected');
+            });
+        });
+
+        // ═══════════════════════════════════════════════════════════════
+        //  ZOOM (simple SVG viewBox manipulation)
+        // ═══════════════════════════════════════════════════════════════
+        let vb = { x: 0, y: 0, w: SVG_W, h: SVG_H };
+
+        function setViewBox() {
+            svg.setAttribute('viewBox', `${vb.x} ${vb.y} ${vb.w} ${vb.h}`);
+        }
+
+        document.getElementById('zoomIn').addEventListener('click', () => {
+            const cx = vb.x + vb.w / 2, cy = vb.y + vb.h / 2;
+            vb.w = Math.max(300, vb.w * .75);
+            vb.h = Math.max(240, vb.h * .75);
+            vb.x = cx - vb.w / 2; vb.y = cy - vb.h / 2;
+            setViewBox();
+        });
+        document.getElementById('zoomOut').addEventListener('click', () => {
+            const cx = vb.x + vb.w / 2, cy = vb.y + vb.h / 2;
+            vb.w = Math.min(SVG_W, vb.w * 1.33);
+            vb.h = Math.min(SVG_H, vb.h * 1.33);
+            vb.x = Math.max(0, cx - vb.w / 2); vb.y = Math.max(0, cy - vb.h / 2);
+            setViewBox();
+        });
+
+        // Pan with mouse drag
+        let dragging = false, dragStart = { x: 0, y: 0 };
+        svg.addEventListener('mousedown', e => { dragging = true; dragStart = { x: e.clientX, y: e.clientY }; });
+        document.addEventListener('mouseup', () => dragging = false);
+        document.addEventListener('mousemove', e => {
+            if (!dragging) return;
+            const rect = svg.getBoundingClientRect();
+            const sx = (e.clientX - dragStart.x) * (vb.w / rect.width);
+            const sy = (e.clientY - dragStart.y) * (vb.h / rect.height);
+            vb.x -= sx; vb.y -= sy;
+            dragStart = { x: e.clientX, y: e.clientY };
+            setViewBox();
+        });
+
+        // ═══════════════════════════════════════════════════════════════
+        //  HELPERS
+        // ═══════════════════════════════════════════════════════════════
+        function showError(el, msg) {
+            el.textContent = '⚠ ' + msg;
+            el.classList.add('show');
+        }
+
+        const notifEl = document.getElementById('notification');
+        let notifTimer;
+        function showNotif(msg) {
+            clearTimeout(notifTimer);
+            notifEl.textContent = msg;
+            notifEl.classList.add('show');
+            notifTimer = setTimeout(() => notifEl.classList.remove('show'), 2500);
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        //  INIT
+        // ═══════════════════════════════════════════════════════════════
+        drawRoads();
+        drawCities();
+        showNotif('🗺 Click any city on the map to start');
+    </script>
+</body>
+
+</html>
