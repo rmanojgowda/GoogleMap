@@ -1,3 +1,0 @@
-D:\mingw64\bin\cmake.exe -E rm -f CMakeFiles\gmap_tests.dir/objects.a
-D:\mingw64\bin\ar.exe qc CMakeFiles\gmap_tests.dir/objects.a @CMakeFiles\gmap_tests.dir\objects1.rsp
-D:\mingw64\bin\c++.exe -O3 -DNDEBUG -Wl,--whole-archive CMakeFiles\gmap_tests.dir/objects.a -Wl,--no-whole-archive -o gmap_tests.exe -Wl,--out-implib,libgmap_tests.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\gmap_tests.dir\linkLibs.rsp
