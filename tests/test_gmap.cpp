@@ -510,8 +510,9 @@ TEST(HeuristicTests, BengaluruToDelhi)
     double h = AStar::heuristic(g, src, dst);
 
     // Must be significantly less than road distance (2208 km)
-    // but reasonable (not 0, not more than road)
-    EXPECT_GT(h, 1000.0);
+    // but reasonable (not 0, not more than road).
+    // Factor 0.5 applied for OSM admissibility: haversine ~1740km * 0.5 = ~870km
+    EXPECT_GT(h, 500.0);
     EXPECT_LT(h, 2208.0);
 }
 

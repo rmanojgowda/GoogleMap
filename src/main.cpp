@@ -19,6 +19,7 @@
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include "../include/MapLoader_OSM.h"
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -384,9 +385,10 @@ int main()
 
     // ── Choose map size ──────────────────────────────────────
     std::cout << "\n  Choose map dataset:\n"
-              << "   1.  Small  ( 31 cities,  56 roads) — quick demo\n"
-              << "   2.  Large  (268 cities, 465 roads) — real India scale\n\n"
-              << "  Enter choice [1/2]: ";
+              << "   1.  Small  (  31 cities,    56 roads) — quick demo\n"
+              << "   2.  Large  ( 268 cities,   465 roads) — real India scale\n"
+              << "   3.  OSM    (5000 cities,  9536 roads) — real OpenStreetMap\n\n"
+              << "  Enter choice [1/2/3]: ";
 
     std::string mapChoice;
     std::getline(std::cin, mapChoice);
@@ -394,9 +396,13 @@ int main()
     if (trim(mapChoice) == "2")
     {
         loadIndiaMapLarge(g);
-        std::cout << GREEN
-                  << "  Loaded LARGE map — watch the benchmark show\n"
-                  << "  A* exploring far fewer nodes than Dijkstra!\n"
+        std::cout << GREEN << "  Large map loaded.\n"
+                  << RESET;
+    }
+    else if (trim(mapChoice) == "3")
+    {
+        loadIndiaMapOSM(g);
+        std::cout << GREEN << "  OSM map loaded — 5000 real Indian cities!\n"
                   << RESET;
     }
     else
