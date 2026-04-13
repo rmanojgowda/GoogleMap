@@ -225,7 +225,18 @@ class RoadHandler(osmium.SimpleHandler):
 
             if prev_cid != -1:
                 key = (min(prev_cid, cid), max(prev_cid, cid))
-                d = max(round(accum_d), 1)
+
+                # FIX: road distance must be at least the straight-line
+                # distance between the two cities. GPS snapping radius is
+                # 15km so accum_d (measured along road GPS points) can be
+                # far shorter than the actual city-to-city distance.
+                # Use max(accum_d, haversine_between_cities) * 1.35
+                city_a = cities[prev_cid]
+                city_b = cities[cid]
+                min_d = haversine(city_a['lat'], city_a['lon'],
+                                  city_b['lat'], city_b['lon'])
+                d = max(round(max(accum_d, min_d) * 1.35), 1)
+
                 # Keep shorter distance if edge already exists
                 if key not in self.edges or self.edges[key] > d:
                     self.edges[key] = d
@@ -262,8 +273,17 @@ pct = len(visited) / len(cities) * 100
 print(f"   Connected: {len(visited):,}/{len(cities):,} ({pct:.1f}%)")
 
 # Connect isolated cities to nearest reachable city
+# MAX_PROXIMITY_KM cap is critical — without it, isolated Northeast cities
+# connect to the nearest reachable city anywhere in India, creating phantom
+# shortcuts like Delhi→Mumbai = 106km instead of ~1400km.
+# 150km allows connecting cities within the same region (state/district)
+# but prevents cross-country phantom edges.
+MAX_PROXIMITY_KM = 150
+
 isolated = [i for i in range(len(cities)) if i not in visited]
 extra_edges = 0
+skipped_isolated = 0
+
 for iso in isolated:
     best_d, best_j = 9999, -1
     for j in visited:
@@ -271,16 +291,24 @@ for iso in isolated:
                       cities[j]['lat'],  cities[j]['lon'])
         if d < best_d:
             best_d, best_j = d, j
-    if best_j >= 0:
+
+    if best_j >= 0 and best_d <= MAX_PROXIMITY_KM:
+        # Only connect if within 150km — keeps edges realistic
         road_d = max(int(best_d * 1.35), 5)
         u, v = min(iso, best_j), max(iso, best_j)
         road_edges.append((u, v, road_d))
         adj[u].append(v); adj[v].append(u)
         visited.add(iso)
         extra_edges += 1
+    else:
+        # City is truly isolated (island, border area, no nearby roads)
+        # Accept it as unreachable rather than create a phantom shortcut
+        skipped_isolated += 1
 
 if extra_edges:
-    print(f"   Added {extra_edges} proximity edges to connect isolated cities")
+    print(f"   Added {extra_edges} proximity edges (max {MAX_PROXIMITY_KM}km cap)")
+if skipped_isolated:
+    print(f"   Skipped {skipped_isolated} truly isolated cities (no road within {MAX_PROXIMITY_KM}km)")
 
 print(f"   Final: {len(road_edges):,} total edges")
 
@@ -389,7 +417,7 @@ NEXT STEPS
 4. Run benchmark: watch Dijkstra vs A* gap widen at this scale
 """
 
-with open(OUTPUT_STATS, "w") as f:
+with open(OUTPUT_STATS, "w", encoding="utf-8") as f:
     f.write(stats)
 
 print(stats)
