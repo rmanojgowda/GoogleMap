@@ -356,7 +356,7 @@ static void printMenu()
     std::cout << "\n"
               << "   1.  Shortest path  (Dijkstra)\n"
               << "   2.  Shortest path  (A*  — faster, same result)\n"
-              << "   3.  Benchmark      (Dijkstra vs A* vs Bidirectional)\n"
+              << "   3.  Benchmark      (Dijkstra vs A* vs BiDi vs Bi-A*)\n"
               << "   4.  Plan optimal road trip\n"
               << "   5.  View all cities\n"
               << "   6.  View all roads\n"
@@ -377,7 +377,7 @@ int main()
     std::cout << BOLD << CYAN
               << "\n  ╔══════════════════════════════════════╗\n"
               << "  ║       Welcome to GMap  v2.0          ║\n"
-              << "  ║  Dijkstra | A* | Bidirectional       ║\n"
+              << "  ║  Dijkstra | A* | BiDi | Bi-A*        ║\n"
               << "  ╚══════════════════════════════════════╝\n"
               << RESET;
 
@@ -526,7 +526,7 @@ static void featureBenchmark(const Graph &g)
               << CYAN << BOLD;
     std::cout << "  ══════════════════════════════════════════════════════\n";
     std::cout << "   ALGORITHM BENCHMARK\n";
-    std::cout << "   Dijkstra  vs  A*  vs  Bidirectional Dijkstra\n";
+    std::cout << "   Dijkstra  vs  A*  vs  BiDi  vs  Bi-A*\n";
     std::cout << "  ══════════════════════════════════════════════════════\n";
     std::cout << RESET;
 

@@ -47,47 +47,74 @@
 #include <vector>
 
 // ── 1. Dijkstra ───────────────────────────────────────────────
-namespace Dijkstra
-{
-    ShortestPathResult shortestPath(const Graph &g, int src, int dst);
-    AlgorithmStats shortestPathStats(const Graph &g, int src, int dst);
+namespace Dijkstra {
+    ShortestPathResult shortestPath(const Graph& g, int src, int dst);
+    AlgorithmStats     shortestPathStats(const Graph& g, int src, int dst);
 
     std::vector<std::vector<double>> allPairsSubset(
-        const Graph &g, const std::vector<int> &subset);
+        const Graph& g, const std::vector<int>& subset);
 }
 
 // ── 2. A* ─────────────────────────────────────────────────────
-namespace AStar
-{
+namespace AStar {
     // Haversine straight-line distance between two cities (km).
     // This is the admissible heuristic h(n):
     //   • Never overestimates  → A* remains optimal
     //   • Consistent           → each city processed at most once
-    double heuristic(const Graph &g, int from, int to);
+    double heuristic(const Graph& g, int from, int to);
 
-    ShortestPathResult shortestPath(const Graph &g, int src, int dst);
-    AlgorithmStats shortestPathStats(const Graph &g, int src, int dst);
+    ShortestPathResult shortestPath(const Graph& g, int src, int dst);
+    AlgorithmStats     shortestPathStats(const Graph& g, int src, int dst);
 }
 
 // ── 3. Bidirectional Dijkstra ─────────────────────────────────
-namespace BiDijkstra
-{
-    ShortestPathResult shortestPath(const Graph &g, int src, int dst);
-    AlgorithmStats shortestPathStats(const Graph &g, int src, int dst);
+namespace BiDijkstra {
+    ShortestPathResult shortestPath(const Graph& g, int src, int dst);
+    AlgorithmStats     shortestPathStats(const Graph& g, int src, int dst);
+
+    // Exposed for use by BiAStar path reconstruction
+    std::vector<int> reconstructPathPublic(int meeting,
+        const std::vector<int>& parF,
+        const std::vector<int>& parB);
 }
 
-// ── Benchmark: run all three and print a comparison table ─────
-namespace Benchmark
-{
-    // Run Dijkstra, A*, and BiDi on the same query and print
+// ── 4. Bidirectional A* ───────────────────────────────────────
+//
+//  Combines A* guidance with bidirectional search.
+//  Uses the AVERAGE HEURISTIC to ensure consistency:
+//
+//    p_forward(n)  = (h(n→dst) - h(n→src)) / 2
+//    p_backward(n) = (h(n→src) - h(n→dst)) / 2
+//
+//  This guarantees both searches use the same "scale" so
+//  neither overshoots the meeting point and misses cheaper paths.
+//
+//  Why average heuristic?
+//    Plain Bi-A* with separate forward/backward heuristics
+//    violates consistency at the meeting point — the forward
+//    search might "charge" a node while backward "discounts" it,
+//    causing the termination check to fire too early.
+//    The average heuristic is symmetric: p_F(n) + p_B(n) = 0
+//    for all n, which restores the correctness guarantee.
+//
+//  Expected improvement over BiDi: ~30-40% fewer nodes
+//  Expected improvement over A*:   ~15-20% fewer nodes
+// ─────────────────────────────────────────────────────────────
+namespace BiAStar {
+    ShortestPathResult shortestPath(const Graph& g, int src, int dst);
+    AlgorithmStats     shortestPathStats(const Graph& g, int src, int dst);
+}
+
+// ── Benchmark: run all four and print a comparison table ──────
+namespace Benchmark {
+    // Run Dijkstra, A*, BiDi, and Bi-A* on the same query and print
     // a formatted table showing distance, nodes explored, time.
-    void compare(const Graph &g, int src, int dst);
+    void compare(const Graph& g, int src, int dst);
 }
 
 // ── Road Trip Planner (TSP) ───────────────────────────────────
-namespace TripPlanner
-{
-    RoadTripResult planTrip(const Graph &g, const std::vector<int> &cityIds);
-    double tourDistance(const std::vector<int> &tour,
-                        const std::vector<std::vector<double>> &dist);
+namespace TripPlanner {
+    RoadTripResult planTrip(const Graph& g, const std::vector<int>& cityIds);
+    double tourDistance(const std::vector<int>& tour,
+                        const std::vector<std::vector<double>>& dist);
 }
