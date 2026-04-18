@@ -1,0 +1,94 @@
+# ============================================================
+#  .github/workflows/ci.yml  —  GMap CI/CD Pipeline
+# ============================================================
+#
+#  WHAT THIS DOES:
+#  Every git push and pull request triggers:
+#    1. Build all executables (gmap, gmap_tests, scale_test,
+#                              stress_test, bottleneck)
+#    2. Run 118 unit tests — fail the build if any fail
+#    3. Run 35 stress tests — fail if any fail
+#    4. Run scale test (small + large maps only, no OSM)
+#    5. Report pass/fail status on GitHub
+#
+#  WHY THIS MATTERS:
+#  Without CI, a bug introduced in one commit might not be
+#  caught until someone manually runs tests days later.
+#  With CI, every push is automatically verified — the
+#  green checkmark on GitHub means "this commit is tested."
+#
+#  This is standard practice at Google, Meta, Amazon.
+#  Having it signals production engineering mindset.
+# ============================================================
+
+name: GMap CI
+
+# Trigger on every push and pull request to main
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    name: Build & Test (Ubuntu)
+    runs-on: ubuntu-latest
+
+    steps:
+    # ── Step 1: Checkout code ─────────────────────────────────
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    # ── Step 2: Install dependencies ─────────────────────────
+    - name: Install CMake and GCC
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y cmake g++ build-essential
+        cmake --version
+        g++ --version
+
+    # ── Step 3: Configure build ───────────────────────────────
+    - name: Configure CMake
+      run: |
+        mkdir -p build
+        cd build
+        cmake .. -DCMAKE_BUILD_TYPE=Release
+
+    # ── Step 4: Build all targets ─────────────────────────────
+    - name: Build
+      run: |
+        cd build
+        cmake --build . --parallel 2
+      # Fails here if any compilation error exists
+
+    # ── Step 5: Run unit tests ────────────────────────────────
+    - name: Run unit tests (118 assertions)
+      run: |
+        cd build
+        ./gmap_tests
+      # Exit code 1 if any test fails → CI fails
+
+    # ── Step 6: Run stress tests ──────────────────────────────
+    - name: Run stress tests (35 tests)
+      run: |
+        cd build
+        ./stress_test
+      # Exit code 1 if any stress test fails
+
+    # ── Step 7: Run scale test (small + large maps) ───────────
+    - name: Run scale test (268-city graph)
+      run: |
+        cd build
+        # OSM dataset not in repo (too large) — scale test
+        # auto-detects its absence and runs small+large only
+        ./scale_test
+      # This shows the Dijkstra vs A* vs BiDi vs Bi-A* table
+
+    # ── Step 8: Print summary ─────────────────────────────────
+    - name: Print test summary
+      run: |
+        echo "================================"
+        echo "  GMap CI Pipeline Complete"
+        echo "  All tests passed!"
+        echo "================================"
