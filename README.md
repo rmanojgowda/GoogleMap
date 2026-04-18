@@ -297,6 +297,220 @@ cmake --build .
 
 ---
 
+## Design at Scale — How to Route Across 500 Million Nodes
+
+*This section answers the interview question: "Your engine works on 5,000 cities.
+How would you redesign it to power a real navigation system at Google Maps scale?"*
+
+---
+
+### The Problem at Scale
+
+Our current engine on 5,000 OSM cities:
+```
+Query time     : ~300 µs
+Nodes explored : ~2,300 (Dijkstra), ~1,800 (Bi-A*)
+Memory         : ~2 MB
+```
+
+Google Maps has ~500 million road nodes globally:
+```
+Target query time  : < 10ms
+Nodes to explore   : 500,000,000
+Naive Dijkstra     : hours per query
+```
+
+Three fundamental problems to solve:
+1. **Speed** — Dijkstra at this scale is too slow
+2. **Memory** — the full graph won't fit in one machine's RAM
+3. **Freshness** — road conditions change in real time
+
+---
+
+### Layer 1 — Contraction Hierarchies (Speed, ~1000x)
+
+**The insight:** Not all nodes matter equally for long routes.
+
+Rank every node by *importance* — roughly, how many shortest paths pass
+through it. Delhi and Mumbai are extremely important (millions of routes
+pass through them). A village in rural Rajasthan is unimportant.
+
+**Offline preprocessing (once, takes days):**
+```
+1. Remove least important node V
+2. For every pair (u, w) where u→V→w was the shortest path:
+   Add shortcut edge u→w with weight d(u,V) + d(V,w)
+3. Repeat for all nodes in importance order
+```
+
+The shortcut edges "remember" paths through removed nodes.
+
+**Online query (microseconds):**
+```
+Forward  search from source    : only expand to HIGHER importance nodes
+Backward search from destination: only expand to HIGHER importance nodes
+Meet at the highest importance node on the optimal path
+```
+
+Result: instead of exploring millions of nodes, each query touches ~100-200
+high-importance nodes. This is how Google gets < 10ms on 500M nodes.
+
+**Why we don't implement it in GMap:**
+CH preprocessing requires days of compute and gigabytes of precomputed
+shortcut edges. It's an offline infrastructure problem, not an algorithm
+problem. The online query is literally bidirectional A* — which we already have.
+
+---
+
+### Layer 2 — Graph Partitioning (Memory, distributed)
+
+A 500M node graph with edge weights won't fit in one machine's RAM.
+
+**Approach: geographic sharding**
+```
+Partition India into regions (e.g., state-level)
+Each region's graph lives on a separate server
+Border nodes connect regions with cross-shard edges
+
+Query Delhi → Kanyakumari:
+  1. Identify which shards the path crosses
+  2. Run CH within each shard
+  3. Stitch results at border nodes
+```
+
+This mirrors how Google's infrastructure works — routing is a distributed
+computation across hundreds of servers, not a single machine.
+
+**Alternative: METIS graph partitioning**
+Minimises cross-partition edges (reduces inter-server communication).
+Used by Facebook's social graph, Google's web graph, and real routing engines.
+
+---
+
+### Layer 3 — Real-Time Traffic (Freshness)
+
+CH precomputes shortest paths assuming static edge weights.
+Traffic changes edge weights in real time — reopening a road, or
+a traffic jam slowing NH44 from 80km/h to 15km/h.
+
+**The problem:** Rerunning full CH preprocessing every minute is impossible
+(takes days). You can't invalidate a 1000x precomputed speedup every time
+there's a fender bender.
+
+**Google's actual solution: two-layer routing**
+```
+Static layer  : CH-preprocessed base graph (updated nightly)
+Dynamic layer : Traffic overlay applied on top of static routes
+```
+
+For a query Delhi → Mumbai with live traffic:
+```
+1. CH gives base route in microseconds (ignores traffic)
+2. Traffic service checks each edge of that route for congestion
+3. If congestion found → re-route affected segment only
+4. Return adjusted ETA
+```
+
+Traffic data comes from 1B+ Android phones reporting GPS speed.
+Each phone is a passive sensor — no user action needed.
+
+**In our system:** We'd add an `edge_weight_multiplier[u][v]` lookup
+that the routing algorithm reads before each edge relaxation:
+```cpp
+double effective_weight = base_weight * traffic_service.getMultiplier(u, v);
+```
+This is the engineering abstraction — the algorithm doesn't change,
+only the weights it reads.
+
+---
+
+### Layer 4 — Turn Costs (Correctness)
+
+Our graph treats roads as undirected edges with distance weights.
+Real routing requires:
+
+```
+Left turns  : +30 seconds (cross traffic, wait for gap)
+U-turns     : +120 seconds (often illegal)
+Right turns : +5 seconds (usually free)
+Traffic lights: variable delay
+```
+
+**Implementation:** Replace node-based graph with edge-based graph.
+Each directed edge (u→v) becomes a node. Turning from edge (u→v) to
+edge (v→w) has cost = turn_penalty(u,v,w).
+
+This doubles the graph size but makes routing significantly more accurate,
+especially in dense urban areas where turn penalties dominate travel time.
+
+---
+
+### Layer 5 — Multimodal Routing
+
+Google Maps combines road + metro + bus + walking in one query.
+
+**The abstraction:** Every transit stop is a node. Every route (road/rail/bus)
+is an edge with time-based weight. A car edge from A to B costs distance/speed.
+A metro edge from station X to Y costs fixed_travel_time + wait_time.
+
+**Time-dependent edges:** A metro edge at 8am has weight 3 minutes.
+The same edge at 3am has weight "closed" (infinite). Dijkstra handles
+this by parameterising edge weights on departure time:
+```cpp
+double weight = edge.getWeight(current_time + accumulated_travel_time);
+```
+
+---
+
+### Full System Architecture at Scale
+
+```
+User query: "Delhi → Mumbai"
+      │
+      ▼
+Load Balancer
+      │
+      ▼
+Routing Service (stateless, horizontally scaled)
+      │
+      ├──► Graph Server (CH-preprocessed, sharded by region)
+      │         Returns base route in microseconds
+      │
+      ├──► Traffic Service (real-time edge weights from phones)
+      │         Adjusts route for current conditions
+      │
+      ├──► ETA Service (ML model on historical travel times)
+      │         Predicts arrival time, not just distance
+      │
+      └──► Cache Layer (Redis/Memcached)
+                Popular routes cached (Delhi→Mumbai queried 10M times/day)
+                Cache hit → skip routing entirely → microseconds
+
+Response: route + ETA + traffic warnings
+```
+
+---
+
+### The Gap Between GMap and This
+
+| Layer | GMap | Production |
+|---|---|---|
+| Core routing | Bi-A* ✅ | CH + Bi-A* |
+| Graph size | 5,000 nodes | 500,000,000 nodes |
+| Preprocessing | None | Days of offline CH |
+| Sharding | Single machine | Hundreds of servers |
+| Traffic | Static weights | Real-time from 1B phones |
+| Turn costs | Not implemented | Full turn penalty model |
+| Multimodal | Road only | Road + Rail + Bus + Walk |
+| Caching | None | Redis, 10M popular routes |
+
+GMap implements the algorithmic core correctly — the production gap is
+infrastructure and data pipeline, not algorithms. The routing logic
+(Dijkstra, A*, Bi-A*) is identical; it just runs on a larger, richer graph.
+
+
+---
+
 ## What's Missing vs Production
 
 | Feature | GMap | Google Maps |
