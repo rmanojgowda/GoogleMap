@@ -86,8 +86,8 @@ struct QueryResult {
     int    src, dst;
     double distance;
     // Per algorithm: {nodes, timeUs}
-    int    dijkNodes, astarNodes, bidiNodes;
-    double dijkTime,  astarTime,  bidiTime;
+    int    dijkNodes, astarNodes, bidiNodes, biAstarNodes;
+    double dijkTime,  astarTime,  bidiTime,  biAstarTime;
     bool   allMatch;   // all 3 distances agree
 };
 
@@ -100,19 +100,22 @@ struct ScaleResult {
     int         E;         // road count
 
     // Averages
-    double avgDijkNodes, avgAstarNodes, avgBidiNodes;
-    double avgDijkTime,  avgAstarTime,  avgBidiTime;
+    double avgDijkNodes, avgAstarNodes, avgBidiNodes, avgBiAstarNodes;
+    double avgDijkTime,  avgAstarTime,  avgBidiTime,  avgBiAstarTime;
 
     // Reduction %
     double astarNodeReduction;   // (dijkstra - astar) / dijkstra * 100
     double bidiNodeReduction;
+    double biAstarNodeReduction;
     double astarTimeReduction;
     double bidiTimeReduction;
+    double biAstarTimeReduction;
 
     // Max values (worst case)
     int maxDijkNodes, maxAstarNodes, maxBidiNodes;
 
     // Correctness
+    int    maxBiAstarNodes;
     int    mismatchCount;   // queries where distances differed
     int    queryCount;
 };
@@ -157,6 +160,7 @@ ScaleResult runScaleTest(const Graph& g, const std::string& label) {
         auto ds = Dijkstra::shortestPathStats(g, src, dst);
         auto as = AStar::shortestPathStats(g, src, dst);
         auto bs = BiDijkstra::shortestPathStats(g, src, dst);
+        auto ba = BiAStar::shortestPathStats(g, src, dst);
 
         // Skip unreachable
         if (ds.totalDistance >= INF) { skipped++; continue; }
@@ -174,10 +178,12 @@ ScaleResult runScaleTest(const Graph& g, const std::string& label) {
         qr.distance   = ds.totalDistance;
         qr.dijkNodes  = ds.nodesExplored;
         qr.astarNodes = as.nodesExplored;
-        qr.bidiNodes  = bs.nodesExplored;
-        qr.dijkTime   = ds.timeUs;
-        qr.astarTime  = as.timeUs;
-        qr.bidiTime   = bs.timeUs;
+        qr.bidiNodes    = bs.nodesExplored;
+        qr.biAstarNodes = ba.nodesExplored;
+        qr.dijkTime     = ds.timeUs;
+        qr.astarTime    = as.timeUs;
+        qr.bidiTime     = bs.timeUs;
+        qr.biAstarTime  = ba.timeUs;
         qr.allMatch   = match;
 
         results.push_back(qr);
@@ -215,36 +221,44 @@ ScaleResult runScaleTest(const Graph& g, const std::string& label) {
     sr.E          = E;
     sr.queryCount = N;
 
-    double sumDN=0, sumAN=0, sumBN=0;
-    double sumDT=0, sumAT=0, sumBT=0;
-    int    maxDN=0, maxAN=0, maxBN=0;
+    double sumDN=0, sumAN=0, sumBN=0, sumBAN=0;
+    double sumDT=0, sumAT=0, sumBT=0, sumBAT=0;
+    int    maxDN=0, maxAN=0, maxBN=0, maxBAN=0;
     int    mismatches = 0;
 
     for (const auto& qr : results) {
-        sumDN += qr.dijkNodes;  sumAN += qr.astarNodes; sumBN += qr.bidiNodes;
-        sumDT += qr.dijkTime;   sumAT += qr.astarTime;  sumBT += qr.bidiTime;
-        maxDN  = std::max(maxDN, qr.dijkNodes);
-        maxAN  = std::max(maxAN, qr.astarNodes);
-        maxBN  = std::max(maxBN, qr.bidiNodes);
+        sumDN  += qr.dijkNodes;    sumAN  += qr.astarNodes;
+        sumBN  += qr.bidiNodes;    sumBAN += qr.biAstarNodes;
+        sumDT  += qr.dijkTime;     sumAT  += qr.astarTime;
+        sumBT  += qr.bidiTime;     sumBAT += qr.biAstarTime;
+        maxDN   = std::max(maxDN,  qr.dijkNodes);
+        maxAN   = std::max(maxAN,  qr.astarNodes);
+        maxBN   = std::max(maxBN,  qr.bidiNodes);
+        maxBAN  = std::max(maxBAN, qr.biAstarNodes);
         if (!qr.allMatch) mismatches++;
     }
 
     sr.avgDijkNodes = sumDN / N;
     sr.avgAstarNodes= sumAN / N;
-    sr.avgBidiNodes = sumBN / N;
-    sr.avgDijkTime  = sumDT / N;
-    sr.avgAstarTime = sumAT / N;
-    sr.avgBidiTime  = sumBT / N;
-    sr.maxDijkNodes = maxDN;
-    sr.maxAstarNodes= maxAN;
-    sr.maxBidiNodes = maxBN;
+    sr.avgBidiNodes   = sumBN  / N;
+    sr.avgBiAstarNodes= sumBAN / N;
+    sr.avgDijkTime    = sumDT  / N;
+    sr.avgAstarTime   = sumAT  / N;
+    sr.avgBidiTime    = sumBT  / N;
+    sr.avgBiAstarTime = sumBAT / N;
+    sr.maxDijkNodes   = maxDN;
+    sr.maxAstarNodes  = maxAN;
+    sr.maxBidiNodes   = maxBN;
+    sr.maxBiAstarNodes= maxBAN;
     sr.mismatchCount= mismatches;
 
     // Reduction percentages
     sr.astarNodeReduction = (sr.avgDijkNodes > 0) ?
         (sr.avgDijkNodes - sr.avgAstarNodes) / sr.avgDijkNodes * 100.0 : 0;
-    sr.bidiNodeReduction  = (sr.avgDijkNodes > 0) ?
-        (sr.avgDijkNodes - sr.avgBidiNodes)  / sr.avgDijkNodes * 100.0 : 0;
+    sr.bidiNodeReduction   = (sr.avgDijkNodes > 0) ?
+        (sr.avgDijkNodes - sr.avgBidiNodes)   / sr.avgDijkNodes * 100.0 : 0;
+    sr.biAstarNodeReduction= (sr.avgDijkNodes > 0) ?
+        (sr.avgDijkNodes - sr.avgBiAstarNodes)/ sr.avgDijkNodes * 100.0 : 0;
     sr.astarTimeReduction = (sr.avgDijkTime > 0) ?
         (sr.avgDijkTime - sr.avgAstarTime)   / sr.avgDijkTime  * 100.0 : 0;
     sr.bidiTimeReduction  = (sr.avgDijkTime > 0) ?
@@ -255,7 +269,8 @@ ScaleResult runScaleTest(const Graph& g, const std::string& label) {
     std::cout << "  " << BOLD << std::left << std::setw(28) << "Metric"
               << std::setw(14) << "Dijkstra"
               << std::setw(14) << "A*"
-              << std::setw(14) << "Bidirectional"
+              << std::setw(14) << "BiDi"
+              << std::setw(14) << "Bi-A*"
               << RESET << "\n";
     rule();
 
@@ -268,13 +283,15 @@ ScaleResult runScaleTest(const Graph& g, const std::string& label) {
 
     std::cout << "  " << std::left << std::setw(28) << "Avg nodes explored"
               << std::setw(14) << (int)sr.avgDijkNodes
-              << GREEN << std::setw(14) << (int)sr.avgAstarNodes
-              << YELLOW << (int)sr.avgBidiNodes << RESET << "\n";
+              << GREEN  << std::setw(14) << (int)sr.avgAstarNodes
+              << YELLOW << std::setw(14) << (int)sr.avgBidiNodes
+              << CYAN   << (int)sr.avgBiAstarNodes << RESET << "\n";
 
     std::cout << "  " << std::left << std::setw(28) << "Node reduction vs Dijkstra"
               << std::setw(14) << "(baseline)"
-              << GREEN << std::setw(14) << fmtPct(sr.astarNodeReduction)
-              << YELLOW << fmtPct(sr.bidiNodeReduction) << RESET << "\n";
+              << GREEN  << std::setw(14) << fmtPct(sr.astarNodeReduction)
+              << YELLOW << std::setw(14) << fmtPct(sr.bidiNodeReduction)
+              << CYAN   << fmtPct(sr.biAstarNodeReduction) << RESET << "\n";
 
     std::cout << "  " << std::left << std::setw(28) << "Avg time (µs)"
               << std::setw(14) << std::fixed << std::setprecision(1) << sr.avgDijkTime
@@ -315,6 +332,7 @@ void printScalingSummary(const std::vector<ScaleResult>& results) {
               << std::setw(10) << "BiDi"
               << std::setw(12) << "A* saves"
               << std::setw(12) << "BiDi saves"
+              << std::setw(12) << "BiA* saves"
               << RESET << "\n";
     rule('=', 92);
 
@@ -335,6 +353,8 @@ void printScalingSummary(const std::vector<ScaleResult>& results) {
                   << r.astarNodeReduction << "%"
                   << YELLOW
                   << std::setw(11) << r.bidiNodeReduction << "%"
+                  << CYAN
+                  << std::setw(11) << r.biAstarNodeReduction << "%"
                   << RESET << "\n";
     }
     rule('=', 92);

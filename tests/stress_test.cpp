@@ -173,7 +173,7 @@ int main(){
         }
 
         double ms = (nowUs()-t0)/1000.0;
-        check(mismatches==0, "1000 queries (268 cities): 0 correctness mismatches");
+        check(mismatches==0, "1000 queries (268 cities): 0 mismatches (Dijkstra=A*=BiDi=Bi-A*)");
         note("Completed in "+std::to_string((int)ms)+" ms · "+
              std::to_string((int)(ms*1000/std::max(queries,1)))+" µs avg");
         note(std::to_string(unreachable)+" unreachable pairs");
@@ -318,10 +318,12 @@ int main(){
             auto rd=Dijkstra::shortestPath(g,i,j);
             auto ra=AStar::shortestPath(g,i,j);
             auto rb=BiDijkstra::shortestPath(g,i,j);
+            auto rc=BiAStar::shortestPath(g,i,j);
             if(!rd.reachable()) continue;
             reachable++;
             if(std::fabs(rd.totalDistance-ra.totalDistance)>1.0 ||
-               std::fabs(rd.totalDistance-rb.totalDistance)>1.0)
+               std::fabs(rd.totalDistance-rb.totalDistance)>1.0 ||
+               std::fabs(rd.totalDistance-rc.totalDistance)>1.0)
                 mismatches++;
         }
         for(int i=0;i<V;i++) for(int j=i+1;j<V;j++){
@@ -332,7 +334,7 @@ int main(){
                     asymmetric++;
         }
         check(mismatches==0,
-            std::to_string(reachable)+" pairs: Dijkstra=A*=BiDi (exhaustive)");
+            std::to_string(reachable)+" pairs: Dijkstra=A*=BiDi=BiA* (exhaustive)");
         check(asymmetric==0,
             "All paths symmetric: dist(A→B) = dist(B→A)");
         note(std::to_string(reachable)+"/"+std::to_string(V*(V-1))+" pairs reachable");
