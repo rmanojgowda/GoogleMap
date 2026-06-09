@@ -5,13 +5,13 @@ Min path length   : 3 cities
 
 Scale                 V       E       Dijk_avg    Astr_avg  BiDi_avg  Dijk_max    Astr_max  A*_save%    BiDi_save%  Mismatches
 ------------------------------------------------------------------------------------------------------------------------
-Small (31 cities)     31      56      18          14        17        31          30        23.8        6.4         0/200
-Large (268 cities)    268     465     140         108       110       267         250       22.8        21.4        0/200
-OSM (5000 cities)     5000    9524    2290        1804      1870      4985        4865      21.2        18.3        0/200
+Small (31 cities)     31      56      18          9         17        31          28        49.0        6.4         0/200
+Large (268 cities)    268     465     140         77        110       267         236       45.0        21.4        0/200
+OSM (5000 cities)     5000    9524    2290        1312      1870      4985        4184      42.7        18.3        0/200
 
 INSIGHTS
 --------
 Graph grew       : 161.3x  (31 -> 5000 cities)
 Dijkstra grew    : 122.5x in nodes explored
-A* grew          : 126.7x in nodes explored
-A* advantage     : 21.2% node reduction at largest scale
+A* grew          : 137.7x in nodes explored
+A* advantage     : 42.7% node reduction at largest scale
