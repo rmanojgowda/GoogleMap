@@ -2545,9 +2545,25 @@
 
     function drawTripRoute(tour, total) {
       clearRoute();
-      const latlngs = tour.map(id => [CITIES[id].lat, CITIES[id].lon]);
-      routeLayer = L.polyline(latlngs, { color: '#1e8e3e', weight: 5, opacity: .85, lineCap: 'round' }).addTo(map);
+
+      // Compute actual road paths between each stop
+      const allLatLngs = [];
+      for (let i = 0; i < tour.length - 1; i++) {
+        const r = dijkstra(tour[i], tour[i+1]);
+        if (r) {
+          const seg = r.path.map(id => [CITIES[id].lat, CITIES[id].lon]);
+          if (i === 0) allLatLngs.push(...seg);
+          else allLatLngs.push(...seg.slice(1)); // avoid duplicate junction point
+        } else {
+          // Fallback to straight line if no path found
+          allLatLngs.push([CITIES[tour[i]].lat, CITIES[tour[i]].lon]);
+          allLatLngs.push([CITIES[tour[i+1]].lat, CITIES[tour[i+1]].lon]);
+        }
+      }
+
+      routeLayer = L.polyline(allLatLngs, { color: '#1e8e3e', weight: 5, opacity: .85, lineCap: 'round' }).addTo(map);
       map.fitBounds(routeLayer.getBounds(), { padding: [60, 60] });
+
       tour.slice(0, -1).forEach((id, i) => {
         const m = L.marker([CITIES[id].lat, CITIES[id].lon],
           { icon: numIcon(i === 0 ? '🏠' : i + 1, i === 0 ? '#1e8e3e' : '#1967d2') }).addTo(map);
@@ -2555,7 +2571,7 @@
       });
       const mid = tour[Math.floor(tour.length / 2)];
       const dl = L.marker([CITIES[mid].lat, CITIES[mid].lon], {
-        icon: L.divIcon({ className: '', html: `<div class="dist-label green">${Math.round(total).toLocaleString()} km total</div>`, iconAnchor: [50, 10] })
+        icon: L.divIcon({ className: '', html: `<div style="background:#1e8e3e;color:#fff;padding:4px 8px;border-radius:12px;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,.3)">${Math.round(total).toLocaleString()} km total</div>`, iconAnchor: [50, 10] })
       }).addTo(map);
       extraMarkers.push(dl);
       syncRouteOnlyAfterDraw();
