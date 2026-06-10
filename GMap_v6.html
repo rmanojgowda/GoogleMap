@@ -10,365 +10,7 @@
     rel="stylesheet">
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
-    // ═══════════════════════════════════════════════════════════════
-    //  PHASE 1 FEATURES
-    // ═══════════════════════════════════════════════════════════════
-
-    // ── URL Sharing ───────────────────────────────────────────────
-    function shareRoute() {
-      if (fromId === -1 || toId === -1) return;
-      const p = new URLSearchParams({ s: fromId, d: toId, a: currentAlgo });
-      const url = location.href.split('#')[0] + '#' + p.toString();
-      navigator.clipboard.writeText(url).then(() =>
-        showNodeCounter('', 0, '🔗 Link copied to clipboard!'));
-    }
-
-    (function loadFromURL() {
-      const hash = location.hash.slice(1);
-      if (!hash) return;
-      try {
-        const p = new URLSearchParams(hash);
-        if (!p.has('s') || !p.has('d')) return;
-        const s = parseInt(p.get('s')), d = parseInt(p.get('d'));
-        if (s < 0 || s >= N || d < 0 || d >= N) return;
-        fromId = s; toId = d;
-        currentAlgo = p.get('a') || 'dijkstra';
-        inpFrom.value = CITIES[s].name;
-        inpTo.value   = CITIES[d].name;
-        document.querySelectorAll('.algo-btn').forEach(b =>
-          b.classList.toggle('active', b.dataset.algo === currentAlgo));
-        setTimeout(runRoute, 600);
-      } catch(e) {}
-    })();
-
-    // ── Animation System ──────────────────────────────────────────
-    let animSt = { running: false, raf: null, frame: 0, res: null, dots: [] };
-
-    document.getElementById('animBtn').addEventListener('click', function() {
-      const animBtnEl = document.getElementById('animBtn');
-      if (!animSt.res) {
-        // First time: run algorithm then animate
-        const f = resolve(inpFrom, fromId), t = resolve(inpTo, toId);
-        if (f === -1 || t === -1) { showErr('dir-err', 'Select cities first.'); return; }
-        fromId = f; toId = t;
-        animBtnEl.disabled = true; animBtnEl.textContent = '⏳…';
-        setTimeout(() => {
-          const fn = { dijkstra, astar, bidi: biDijkstra, biastar: biAStar }[currentAlgo];
-          const res = fn(f, t);
-          animBtnEl.disabled = false;
-          if (!res) { animBtnEl.textContent = '▶ Animate'; showErr('dir-err', 'No route found.'); return; }
-          lastResult = res;
-          clearRoute(); clearExplored();
-          startAnim(res);
-        }, 50);
-      } else if (animSt.running) {
-        // Pause
-        animSt.running = false;
-        cancelAnimationFrame(animSt.raf);
-        this.textContent = '▶ Resume';
-      } else if (animSt.frame >= animSt.res.explored.filter(e => !new Set(animSt.res.path).has(e.id)).length) {
-        // Replay
-        animSt.dots.forEach(d => map.removeLayer(d));
-        animSt.dots = [];
-        startAnim(animSt.res);
-      } else {
-        // Resume
-        animSt.running = true;
-        runAnimFrame();
-        this.textContent = '⏸ Pause';
-      }
-    });
-
-    function startAnim(res) {
-      const pathSet = new Set(res.path);
-      const explored = res.explored.filter(e => !pathSet.has(e.id));
-      const COLS = {
-        Dijkstra:      { single: '#93c5fd' },
-        'A★':          { single: '#6ee7b7' },
-        Bidirectional: { fwd: '#fbbf24', bwd: '#f97316' },
-        'Bi-A★':       { fwd: '#d8b4fe', bwd: '#a855f7' }
-      };
-      const ac = COLS[res.name] || { single: '#93c5fd' };
-      animSt = { running: true, raf: null, frame: 0, res: res, dots: [], explored, ac };
-      document.getElementById('animBtn').textContent = '⏸ Pause';
-      runAnimFrame();
-    }
-
-    function runAnimFrame() {
-      if (!animSt.running) return;
-      const speed = parseInt(document.getElementById('animSpeed').value);
-      const total = animSt.explored.length;
-      const batch = Math.max(1, Math.floor(speed * total / 400));
-      for (let i = 0; i < batch && animSt.frame < total; i++) {
-        const { id, dir } = animSt.explored[animSt.frame];
-        const col = animSt.ac[dir] || animSt.ac.single || '#93c5fd';
-        const c = CITIES[id];
-        const dot = L.circleMarker([c.lat, c.lon], {
-          radius: 3, fillColor: col, fillOpacity: 0.75,
-          color: 'transparent', weight: 0, renderer: canvasRenderer
-        }).addTo(map);
-        animSt.dots.push(dot);
-        animSt.frame++;
-      }
-      const pct = Math.min(100, Math.round(animSt.frame / total * 100));
-      document.getElementById('animInfo').textContent =
-        `${animSt.frame.toLocaleString()} / ${total.toLocaleString()} nodes explored (${pct}%)`;
-      if (animSt.frame >= total) {
-        animSt.running = false;
-        drawRoute(animSt.res);
-        document.getElementById('animBtn').textContent = '▶ Replay';
-        document.getElementById('animInfo').textContent =
-          `✓ ${total.toLocaleString()} nodes → ${Math.round(animSt.res.dist).toLocaleString()} km`;
-        return;
-      }
-      animSt.raf = requestAnimationFrame(runAnimFrame);
-    }
-
-    // ── Algorithm Race ────────────────────────────────────────────
-    document.getElementById('raceBtn').addEventListener('click', async () => {
-      const f = resolve(document.getElementById('binp-from'), bFromId);
-      const t = resolve(document.getElementById('binp-to'), bToId);
-      if (f === -1 || t === -1) { showErr('bench-err', 'Select cities first.'); return; }
-      bFromId = f; bToId = t;
-      const btn = document.getElementById('raceBtn');
-      btn.disabled = true; btn.textContent = '⏳ Racing…';
-      document.getElementById('spinner').classList.add('show');
-
-      const run = fn => new Promise(r => setTimeout(() => r(fn(f, t)), 16));
-      const [r1, r2, r3, r4] = await Promise.all([run(dijkstra), run(astar), run(biDijkstra), run(biAStar)]);
-
-      document.getElementById('spinner').classList.remove('show');
-      btn.disabled = false; btn.textContent = '🏁 Race';
-      if (!r1) { showErr('bench-err', 'No route.'); return; }
-
-      clearRoute(); clearExplored();
-      document.getElementById('raceLegend').style.display = 'flex';
-
-      const RCOLS = ['#1967d2', '#1e8e3e', '#e37400', '#9334e6'];
-      const results = [r1, r2, r3, r4];
-      const pathSets = results.map(r => new Set(r ? r.path : []));
-      const exps = results.map((r, i) => r ? r.explored.filter(e => !pathSets[i].has(e.id)) : []);
-      const frames = [0, 0, 0, 0];
-      const maxLen = Math.max(...exps.map(e => e.length));
-
-      function raceStep() {
-        const batch = Math.max(1, Math.ceil(maxLen / 180));
-        let allDone = true;
-        for (let a = 0; a < 4; a++) {
-          for (let b = 0; b < batch && frames[a] < exps[a].length; b++) {
-            const { id } = exps[a][frames[a]];
-            const c = CITIES[id];
-            L.circleMarker([c.lat, c.lon], {
-              radius: 3, fillColor: RCOLS[a], fillOpacity: 0.6,
-              color: 'transparent', weight: 0, renderer: canvasRenderer
-            }).addTo(map);
-            frames[a]++;
-          }
-          if (frames[a] < exps[a].length) allDone = false;
-        }
-        if (allDone) { drawRoute(r4 || r1); return; }
-        requestAnimationFrame(raceStep);
-      }
-      requestAnimationFrame(raceStep);
-      if (r4) map.fitBounds([[CITIES[f].lat, CITIES[f].lon], [CITIES[t].lat, CITIES[t].lon]], { padding: [80, 80] });
-    });
-
-    // ── Isochrone / Zones ─────────────────────────────────────────
-    let iCentreId = -1;
-    buildAC(document.getElementById('iinp'), document.getElementById('iac'), id => { iCentreId = id; });
-
-    let isoLayer = null;
-    document.getElementById('isoBtn').addEventListener('click', () => {
-      if (iCentreId === -1) {
-        const m = CITIES.find(c => c.name.toLowerCase() === document.getElementById('iinp').value.trim().toLowerCase());
-        if (!m) { showNodeCounter('', 0, '⚠ Select a valid centre city'); return; }
-        iCentreId = m.id;
-      }
-      const maxDist = parseInt(document.getElementById('isoRange').value);
-      const btn = document.getElementById('isoBtn');
-      btn.disabled = true; btn.textContent = '⏳ Computing…';
-      document.getElementById('spinner').classList.add('show');
-
-      setTimeout(() => {
-        document.getElementById('spinner').classList.add('show');
-        if (isoLayer) { map.removeLayer(isoLayer); isoLayer = null; }
-
-        // Run Dijkstra from centre (no destination — full scan)
-        const g = new Float64Array(N).fill(Infinity);
-        const vis = new Uint8Array(N);
-        g[iCentreId] = 0;
-        const pq = new MinHeap(); pq.push(0, iCentreId);
-        while (pq.size) {
-          const [d, u] = pq.pop();
-          if (vis[u]) continue; vis[u] = 1;
-          if (d > maxDist) continue;
-          for (const { to: v, d: w } of adj[u]) {
-            const ng = g[u] + w;
-            if (ng < g[v] && ng <= maxDist) { g[v] = ng; pq.push(ng, v); }
-          }
-        }
-
-        const layers = [];
-        const BANDS = [
-          { max: 0.25, col: '#22c55e' },
-          { max: 0.50, col: '#eab308' },
-          { max: 0.75, col: '#f97316' },
-          { max: 1.00, col: '#ef4444' },
-        ];
-        let reachable = 0;
-        CITIES.forEach((c, i) => {
-          if (i === iCentreId) return;
-          if (g[i] === Infinity) return;
-          reachable++;
-          const ratio = g[i] / maxDist;
-          const band = BANDS.find(b => ratio <= b.max) || BANDS[3];
-          layers.push(L.circleMarker([c.lat, c.lon], {
-            radius: 5, fillColor: band.col, fillOpacity: 0.8,
-            color: '#fff', weight: 1, renderer: canvasRenderer
-          }).bindTooltip(`${c.name} — ${Math.round(g[i])} km`, { className: 'city-tooltip' }));
-        });
-
-        // Centre marker
-        layers.push(L.circleMarker([CITIES[iCentreId].lat, CITIES[iCentreId].lon], {
-          radius: 9, fillColor: '#1967d2', fillOpacity: 1, color: '#fff', weight: 2
-        }).bindTooltip(`📍 ${CITIES[iCentreId].name}`, { className: 'city-tooltip', permanent: true }));
-
-        isoLayer = L.featureGroup(layers).addTo(map);
-        map.fitBounds(isoLayer.getBounds(), { padding: [40, 40] });
-
-        const res = document.getElementById('isoResult');
-        res.innerHTML = `<strong>${reachable}</strong> cities reachable from <strong>${CITIES[iCentreId].name}</strong> within <strong>${maxDist} km</strong>.`;
-        res.classList.add('show');
-
-        btn.disabled = false; btn.textContent = '🌐 Draw Zones';
-        document.getElementById('spinner').classList.remove('show');
-      }, 50);
-    });
-
-    // ── Graph Stats ───────────────────────────────────────────────
-    let statsBuilt = false;
-    function buildStats() {
-      if (statsBuilt) return;
-      statsBuilt = true;
-
-        const degrees = CITIES.map((_, i) => adjTo[i].length);
-        const total = degrees.reduce((a, b) => a + b, 0);
-        const avgDeg = (total / N).toFixed(2);
-        const maxDeg = Math.max(...degrees);
-        const isolated = degrees.filter(d => d === 0).length;
-
-        // BFS to count connected components
-        const seen = new Uint8Array(N);
-        let components = 0;
-        for (let start = 0; start < N; start++) {
-          if (seen[start]) continue;
-          components++;
-          const q = [start];
-          seen[start] = 1;
-          while (q.length) {
-            const u = q.pop();
-            for (const v of adjTo[u]) { if (!seen[v]) { seen[v] = 1; q.push(v); } }
-          }
-        }
-
-        document.getElementById('sCities').textContent = N.toLocaleString();
-        document.getElementById('sRoads').textContent = ROADS.length.toLocaleString();
-        document.getElementById('sAvgDeg').textContent = avgDeg;
-        document.getElementById('sMaxDeg').textContent = maxDeg;
-        document.getElementById('sIsolated').textContent = isolated;
-        document.getElementById('sComponents').textContent = components;
-
-        // Top hubs
-        const sorted = CITIES.map((c, i) => ({ id: i, name: c.name, deg: degrees[i] }))
-          .sort((a, b) => b.deg - a.deg).slice(0, 12);
-        const maxD = sorted[0].deg;
-        const hubEl = document.getElementById('hubList');
-        sorted.forEach((c, i) => {
-          const row = document.createElement('div'); row.className = 'hub-row';
-          row.innerHTML = `<span class="hub-rank">${i + 1}</span>
-            <span class="hub-name">${c.name}</span>
-            <div class="hub-bar-t"><div class="hub-bar-f" style="width:${Math.round(c.deg/maxD*100)}%"></div></div>
-            <span class="hub-deg">${c.deg}</span>`;
-          hubEl.appendChild(row);
-        });
-
-        // Degree distribution bar chart
-        const maxBucket = Math.min(maxDeg + 1, 20);
-        const buckets = new Array(maxBucket).fill(0);
-        degrees.forEach(d => { const b = Math.min(d, maxBucket - 1); buckets[b]++; });
-        const canvas = document.getElementById('degChart');
-        canvas.width = canvas.parentElement.clientWidth - 28;
-        const ctx = canvas.getContext('2d');
-        const bw = canvas.width / maxBucket;
-        const maxB = Math.max(...buckets);
-        ctx.fillStyle = '#1967d2';
-        buckets.forEach((cnt, i) => {
-          const barH = Math.round((cnt / maxB) * 75);
-          ctx.fillRect(i * bw + 1, 90 - barH, bw - 2, barH);
-          if (i % 2 === 0) {
-            ctx.fillStyle = '#9aa0a6'; ctx.font = '9px monospace';
-            ctx.fillText(i, i * bw + 2, 90); ctx.fillStyle = '#1967d2';
-          }
-        });
-      }, { once: false });
-    })();
-
-    // ── 3-opt TSP ─────────────────────────────────────────────────
-    function threeOptPass(tour, mat) {
-      const n = tour.length - 1;
-      for (let i = 0; i < n - 2; i++) {
-        for (let j = i + 1; j < n - 1; j++) {
-          for (let k = j + 1; k < n; k++) {
-            const A = tour[i], B = tour[i+1];
-            const C = tour[j], D = tour[j+1];
-            const E = tour[k], F = tour[k+1 <= n ? k+1 : 0];
-            const d0 = mat[A][B] + mat[C][D] + mat[E][F];
-            // Pure 3-opt: seg1 + seg3 + seg2
-            const d1 = mat[A][D] + mat[E][B] + mat[C][F];
-            if (d1 < d0 - 1e-9) {
-              const seg1 = tour.slice(0, i+1);
-              const seg2 = tour.slice(i+1, j+1);
-              const seg3 = tour.slice(j+1, k+1);
-              const rest = tour.slice(k+1);
-              tour.splice(0, tour.length, ...seg1, ...seg3, ...seg2, ...rest);
-              return true;
-            }
-          }
-        }
-      }
-      return false;
-    }
-
-    // ── Trip mode (fixed order vs optimise) ───────────────────────
-    let tripMode = 'opt'; // 'opt' or 'fix'
-    function setTripMode(mode) {
-      tripMode = mode;
-      document.getElementById('modeOptBtn').classList.toggle('active', mode === 'opt');
-      document.getElementById('modeFixBtn').classList.toggle('active', mode === 'fix');
-      document.getElementById('tripHint').innerHTML = mode === 'opt'
-        ? 'Add cities to visit. GMap finds the <strong>most efficient order</strong> using Nearest-Neighbour + <strong>3-opt</strong> TSP.'
-        : 'Add cities in <strong>your preferred order</strong>. GMap finds the shortest path through them in that exact sequence.';
-    }
-
-    // Override plan button
-    // planBtn handled by Phase1 listener below;
-    document.getElementById('benchBtn').addEventListener('click', () => {
-      setTimeout(() => {
-        document.getElementById('aiExplainBtn').disabled = false;
-      }, 2000);
-    });
-
-    // Show share row when route shown
-    const _origFindBtn = document.getElementById('findBtn');
-    document.getElementById('findBtn').addEventListener('click', () => {
-      setTimeout(() => {
-        if (document.getElementById('stats-card').classList.contains('show')) {
-          document.getElementById('shareRow').style.display = 'block';
-        }
-      }, 600);
-    });
-
-  </script>
+    </script>
   <style>
     *,
     *::before,
@@ -3239,6 +2881,423 @@
     }
 
     showNodeCounter('', 0, '🗺 Click any city marker or use the search');
+  
+    // ═══════════════════════════════════════════════════════════════
+    //  PHASE 1 — all features injected at correct location
+    // ═══════════════════════════════════════════════════════════════
+
+    // ── URL Sharing ───────────────────────────────────────────────
+    function shareRoute() {
+      if (fromId === -1 || toId === -1) return;
+      const p = new URLSearchParams({ s: fromId, d: toId, a: currentAlgo });
+      const url = location.href.split('#')[0] + '#' + p.toString();
+      navigator.clipboard.writeText(url).then(() => showNodeCounter('', 0, '🔗 Link copied!'));
+    }
+
+    (function loadFromURL() {
+      const hash = location.hash.slice(1);
+      if (!hash) return;
+      try {
+        const p = new URLSearchParams(hash);
+        if (!p.has('s') || !p.has('d')) return;
+        const s = parseInt(p.get('s')), d = parseInt(p.get('d'));
+        if (s < 0 || s >= N || d < 0 || d >= N) return;
+        fromId = s; toId = d;
+        currentAlgo = p.get('a') || 'dijkstra';
+        inpFrom.value = CITIES[s].name; inpTo.value = CITIES[d].name;
+        document.querySelectorAll('.algo-btn').forEach(b =>
+          b.classList.toggle('active', b.dataset.algo === currentAlgo));
+        setTimeout(runRoute, 600);
+      } catch(e) {}
+    })();
+
+    // ── Animation System ──────────────────────────────────────────
+    let animSt = { running: false, raf: null, frame: 0, res: null, dots: [], explored: [], ac: {} };
+
+    document.getElementById('animBtn').addEventListener('click', function() {
+      const animBtnEl = document.getElementById('animBtn');
+      if (!animSt.res) {
+        const f = resolve(inpFrom, fromId), t = resolve(inpTo, toId);
+        if (f === -1 || t === -1) { showErr('dir-err', 'Select cities first.'); return; }
+        fromId = f; toId = t;
+        animBtnEl.disabled = true; animBtnEl.textContent = '⏳…';
+        setTimeout(() => {
+          const fn = { dijkstra, astar, bidi: biDijkstra, biastar: biAStar }[currentAlgo];
+          const res = fn(f, t);
+          animBtnEl.disabled = false;
+          if (!res) { animBtnEl.textContent = '▶ Animate'; showErr('dir-err', 'No route found.'); return; }
+          lastResult = res;
+          clearRoute(); clearExplored();
+          startAnim(res);
+        }, 50);
+      } else if (animSt.running) {
+        animSt.running = false;
+        cancelAnimationFrame(animSt.raf);
+        animBtnEl.textContent = '▶ Resume';
+      } else if (animSt.frame >= animSt.explored.length) {
+        animSt.dots.forEach(d => map.removeLayer(d));
+        animSt.dots = [];
+        startAnim(animSt.res);
+      } else {
+        animSt.running = true;
+        animSt.raf = requestAnimationFrame(runAnimFrame);
+        animBtnEl.textContent = '⏸ Pause';
+      }
+    });
+
+    function startAnim(res) {
+      const pathSet = new Set(res.path);
+      const explored = res.explored.filter(e => !pathSet.has(e.id));
+      const COLS = {
+        Dijkstra:      { single: '#93c5fd' },
+        'A★':          { single: '#6ee7b7' },
+        Bidirectional: { fwd: '#fbbf24', bwd: '#f97316' },
+        'Bi-A★':       { fwd: '#d8b4fe', bwd: '#a855f7' }
+      };
+      const ac = COLS[res.name] || { single: '#93c5fd' };
+      animSt = { running: true, raf: null, frame: 0, res, dots: [], explored, ac };
+      document.getElementById('animBtn').textContent = '⏸ Pause';
+      document.getElementById('animInfo').textContent = '';
+      animSt.raf = requestAnimationFrame(runAnimFrame);
+    }
+
+    function runAnimFrame() {
+      if (!animSt.running) return;
+      const speed = parseInt(document.getElementById('animSpeed').value);
+      const total = animSt.explored.length;
+      const batch = Math.max(1, Math.floor(speed * total / 400));
+      for (let i = 0; i < batch && animSt.frame < total; i++) {
+        const { id, dir } = animSt.explored[animSt.frame];
+        const col = animSt.ac[dir] || animSt.ac.single || '#93c5fd';
+        const c = CITIES[id];
+        const dot = L.circleMarker([c.lat, c.lon], {
+          radius: 3, fillColor: col, fillOpacity: 0.75,
+          color: 'transparent', weight: 0, renderer: canvasRenderer
+        }).addTo(map);
+        animSt.dots.push(dot);
+        animSt.frame++;
+      }
+      const pct = Math.min(100, Math.round(animSt.frame / total * 100));
+      document.getElementById('animInfo').textContent =
+        `${animSt.frame.toLocaleString()} / ${total.toLocaleString()} nodes (${pct}%)`;
+      if (animSt.frame >= total) {
+        animSt.running = false;
+        drawRoute(animSt.res);
+        document.getElementById('animBtn').textContent = '▶ Replay';
+        document.getElementById('animInfo').textContent =
+          `✓ ${total.toLocaleString()} nodes → ${Math.round(animSt.res.dist)} km`;
+        return;
+      }
+      animSt.raf = requestAnimationFrame(runAnimFrame);
+    }
+
+    // ── Algorithm Race ────────────────────────────────────────────
+    document.getElementById('raceBtn').addEventListener('click', async () => {
+      const f = resolve(document.getElementById('binp-from'), bFromId);
+      const t = resolve(document.getElementById('binp-to'), bToId);
+      if (f === -1 || t === -1) { showErr('bench-err', 'Select cities first.'); return; }
+      bFromId = f; bToId = t;
+      const btn = document.getElementById('raceBtn');
+      btn.disabled = true; btn.textContent = '⏳ Racing…';
+      document.getElementById('spinner').classList.add('show');
+      const run = fn => new Promise(r => setTimeout(() => r(fn(f, t)), 16));
+      const [r1, r2, r3, r4] = await Promise.all([run(dijkstra), run(astar), run(biDijkstra), run(biAStar)]);
+      document.getElementById('spinner').classList.remove('show');
+      btn.disabled = false; btn.textContent = '🏁 Race';
+      if (!r1) { showErr('bench-err', 'No route found.'); return; }
+      clearRoute(); clearExplored();
+      document.getElementById('raceLegend').style.display = 'flex';
+      const RCOLS = ['#1967d2','#1e8e3e','#e37400','#9334e6'];
+      const results = [r1, r2, r3, r4];
+      const exps = results.map(r => r ? r.explored.filter(e => !new Set(r.path).has(e.id)) : []);
+      const frames = [0,0,0,0];
+      const maxLen = Math.max(...exps.map(e => e.length));
+      function raceStep() {
+        const batch = Math.max(1, Math.ceil(maxLen / 180));
+        let allDone = true;
+        for (let a = 0; a < 4; a++) {
+          for (let b = 0; b < batch && frames[a] < exps[a].length; b++) {
+            const { id } = exps[a][frames[a]];
+            const c = CITIES[id];
+            L.circleMarker([c.lat, c.lon], {
+              radius: 3, fillColor: RCOLS[a], fillOpacity: 0.6,
+              color: 'transparent', weight: 0, renderer: canvasRenderer
+            }).addTo(map);
+            frames[a]++;
+          }
+          if (frames[a] < exps[a].length) allDone = false;
+        }
+        if (allDone) { drawRoute(r4 || r1); return; }
+        requestAnimationFrame(raceStep);
+      }
+      requestAnimationFrame(raceStep);
+      map.fitBounds([[CITIES[f].lat, CITIES[f].lon],[CITIES[t].lat, CITIES[t].lon]],{padding:[80,80]});
+    });
+
+    // ── Isochrone / Zones ─────────────────────────────────────────
+    let iCentreId = -1;
+    buildAC(document.getElementById('iinp'), document.getElementById('iac'), id => { iCentreId = id; });
+    let isoLayer = null;
+
+    document.getElementById('isoBtn').addEventListener('click', () => {
+      if (iCentreId === -1) {
+        const m = CITIES.find(c => c.name.toLowerCase() === document.getElementById('iinp').value.trim().toLowerCase());
+        if (!m) { showNodeCounter('', 0, '⚠ Select a valid centre city'); return; }
+        iCentreId = m.id;
+      }
+      const maxDist = parseInt(document.getElementById('isoRange').value);
+      const btn = document.getElementById('isoBtn');
+      btn.disabled = true; btn.textContent = '⏳ Computing…';
+      document.getElementById('spinner').classList.add('show');
+      setTimeout(() => {
+        if (isoLayer) { map.removeLayer(isoLayer); isoLayer = null; }
+        const g = new Float64Array(N).fill(Infinity);
+        const vis = new Uint8Array(N);
+        g[iCentreId] = 0;
+        const pq = new MinHeap(); pq.push(0, iCentreId);
+        while (pq.size) {
+          const [d, u] = pq.pop();
+          if (vis[u]) continue; vis[u] = 1;
+          if (d > maxDist) continue;
+          for (const { to: v, d: w } of adj[u]) {
+            const ng = g[u] + w;
+            if (ng < g[v] && ng <= maxDist) { g[v] = ng; pq.push(ng, v); }
+          }
+        }
+        const BANDS = [{max:0.25,col:'#22c55e'},{max:0.50,col:'#eab308'},{max:0.75,col:'#f97316'},{max:1.00,col:'#ef4444'}];
+        const layers = []; let reachable = 0;
+        CITIES.forEach((c, i) => {
+          if (i === iCentreId || g[i] === Infinity) return;
+          reachable++;
+          const ratio = g[i] / maxDist;
+          const band = BANDS.find(b => ratio <= b.max) || BANDS[3];
+          layers.push(L.circleMarker([c.lat, c.lon], {
+            radius: 5, fillColor: band.col, fillOpacity: 0.8,
+            color: '#fff', weight: 1, renderer: canvasRenderer
+          }).bindTooltip(`${c.name} — ${Math.round(g[i])} km`, {className:'city-tooltip'}));
+        });
+        layers.push(L.circleMarker([CITIES[iCentreId].lat, CITIES[iCentreId].lon], {
+          radius: 9, fillColor: '#1967d2', fillOpacity: 1, color: '#fff', weight: 2
+        }).bindTooltip(`📍 ${CITIES[iCentreId].name}`, {className:'city-tooltip', permanent:true}));
+        isoLayer = L.featureGroup(layers).addTo(map);
+        map.fitBounds(isoLayer.getBounds(), {padding:[40,40]});
+        const res = document.getElementById('isoResult');
+        res.innerHTML = `<strong>${reachable}</strong> cities reachable from <strong>${CITIES[iCentreId].name}</strong> within <strong>${maxDist} km</strong>.`;
+        res.classList.add('show');
+        btn.disabled = false; btn.textContent = '🌐 Draw Zones';
+        document.getElementById('spinner').classList.remove('show');
+      }, 50);
+    });
+
+    // ── Graph Stats ───────────────────────────────────────────────
+    let statsBuilt = false;
+    function buildStats() {
+      if (statsBuilt) return; statsBuilt = true;
+      const degrees = CITIES.map((_, i) => adjTo[i].length);
+      const total = degrees.reduce((a,b) => a+b, 0);
+      document.getElementById('sCities').textContent = N.toLocaleString();
+      document.getElementById('sRoads').textContent = ROADS.length.toLocaleString();
+      document.getElementById('sAvgDeg').textContent = (total/N).toFixed(2);
+      document.getElementById('sMaxDeg').textContent = Math.max(...degrees);
+      document.getElementById('sIsolated').textContent = degrees.filter(d=>d===0).length;
+      const seen = new Uint8Array(N); let components = 0;
+      for (let s = 0; s < N; s++) {
+        if (seen[s]) continue; components++;
+        const q = [s]; seen[s] = 1;
+        while (q.length) { const u = q.pop(); for (const v of adjTo[u]) if (!seen[v]){seen[v]=1;q.push(v);} }
+      }
+      document.getElementById('sComponents').textContent = components;
+      const sorted = CITIES.map((c,i) => ({name:c.name,deg:degrees[i]})).sort((a,b)=>b.deg-a.deg).slice(0,12);
+      const maxD = sorted[0].deg;
+      const hubEl = document.getElementById('hubList'); hubEl.innerHTML = '';
+      sorted.forEach((c,i) => {
+        const row = document.createElement('div'); row.className = 'hub-row';
+        row.innerHTML = `<span class="hub-rank">${i+1}</span><span class="hub-name">${c.name}</span><div class="hub-bar-t"><div class="hub-bar-f" style="width:${Math.round(c.deg/maxD*100)}%"></div></div><span class="hub-deg">${c.deg}</span>`;
+        hubEl.appendChild(row);
+      });
+      setTimeout(() => {
+        const canvas = document.getElementById('degChart');
+        canvas.width = canvas.parentElement.clientWidth - 28;
+        const ctx = canvas.getContext('2d');
+        const maxBucket = Math.min(Math.max(...degrees)+1, 20);
+        const buckets = new Array(maxBucket).fill(0);
+        degrees.forEach(d => buckets[Math.min(d,maxBucket-1)]++);
+        const maxB = Math.max(...buckets);
+        const bw = canvas.width / maxBucket;
+        ctx.fillStyle = '#1967d2';
+        buckets.forEach((cnt,i) => {
+          const barH = Math.round((cnt/maxB)*75);
+          ctx.fillRect(i*bw+1, 89-barH, bw-2, barH);
+          if (i%2===0){ctx.fillStyle='#9aa0a6';ctx.font='9px monospace';ctx.fillText(i,i*bw+2,90);ctx.fillStyle='#1967d2';}
+        });
+      }, 80);
+    }
+
+    // ── 3-opt TSP ─────────────────────────────────────────────────
+    function threeOptPass(tour, mat) {
+      const n = tour.length - 1;
+      for (let i = 0; i < n-2; i++) {
+        for (let j = i+1; j < n-1; j++) {
+          for (let k = j+1; k < n; k++) {
+            const A=tour[i],B=tour[i+1],C=tour[j],D=tour[j+1],E=tour[k],F=tour[k+1<=n?k+1:0];
+            const d0 = mat[A][B]+mat[C][D]+mat[E][F];
+            const d1 = mat[A][D]+mat[E][B]+mat[C][F];
+            if (d1 < d0-1e-9) {
+              const s1=tour.slice(0,i+1),s2=tour.slice(i+1,j+1),s3=tour.slice(j+1,k+1),rest=tour.slice(k+1);
+              tour.splice(0,tour.length,...s1,...s3,...s2,...rest);
+              return true;
+            }
+          }
+        }
+      }
+      return false;
+    }
+
+    // ── Trip mode ─────────────────────────────────────────────────
+    let tripMode = 'opt';
+    function setTripMode(mode) {
+      tripMode = mode;
+      document.getElementById('modeOptBtn').classList.toggle('active', mode==='opt');
+      document.getElementById('modeFixBtn').classList.toggle('active', mode==='fix');
+      document.getElementById('tripHint').innerHTML = mode==='opt'
+        ? 'Add cities to visit. GMap finds the <strong>most efficient order</strong> using Nearest-Neighbour + <strong>3-opt</strong> TSP.'
+        : 'Add cities in <strong>your preferred order</strong>. GMap routes through them in that exact sequence.';
+    }
+
+    // ── AI Features ───────────────────────────────────────────────
+    let aiHistory = [];
+
+    function saveAIKey() {
+      const k = document.getElementById('aiKeyInp').value.trim();
+      if (!k) return;
+      sessionStorage.setItem('gmap_ai_key', k);
+      document.getElementById('aiKeyStatus').textContent = '✅ Key saved for this session.';
+      document.getElementById('aiKeyInp').value = '●●●●●●●●●●●●●●●●●●●●';
+    }
+
+    async function callClaude(prompt, sys) {
+      const key = sessionStorage.getItem('gmap_ai_key');
+      if (!key) { addAIMsg('bot','⚠️ Enter your Anthropic API key first.'); return null; }
+      try {
+        const body = { model:'claude-sonnet-4-20250514', max_tokens:1000, messages:[{role:'user',content:prompt}] };
+        if (sys) body.system = sys;
+        const res = await fetch('https://api.anthropic.com/v1/messages', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},
+          body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (data.error) { addAIMsg('bot',`❌ ${data.error.message}`); return null; }
+        return data.content[0].text;
+      } catch(e) { addAIMsg('bot',`❌ ${e.message}`); return null; }
+    }
+
+    function addAIMsg(role, text) {
+      const chat = document.getElementById('aiChat');
+      const el = document.createElement('div');
+      el.className = `ai-bubble ${role}`; el.textContent = text;
+      chat.appendChild(el); chat.scrollTop = chat.scrollHeight;
+      return el;
+    }
+
+    async function sendAINL() {
+      const inp = document.getElementById('aiNlInp');
+      const query = inp.value.trim(); if (!query) return;
+      inp.value = ''; switchTab('ai');
+      addAIMsg('user', query);
+      const thinking = addAIMsg('thinking','🤔 Thinking…');
+      const cityList = CITIES.slice(0,300).map(c=>c.name).join(', ');
+      const sys = `You are a routing assistant for GMap India. Extract routing intent.
+Available algorithms: dijkstra, astar, bidi, biastar.
+Cities (partial): ${cityList}
+Reply ONLY with JSON: {"src":"CityName","dst":"CityName","algo":"astar","explain":"one sentence"}
+If not a routing request: {"src":null,"dst":null,"algo":null,"explain":"your response"}`;
+      const reply = await callClaude(query, sys);
+      thinking.remove();
+      if (!reply) return;
+      try {
+        const p = JSON.parse(reply);
+        if (p.src && p.dst) {
+          const sc = CITIES.find(c=>c.name.toLowerCase()===p.src.toLowerCase());
+          const dc = CITIES.find(c=>c.name.toLowerCase()===p.dst.toLowerCase());
+          if (sc && dc) {
+            fromId=sc.id; toId=dc.id; inpFrom.value=sc.name; inpTo.value=dc.name;
+            currentAlgo=p.algo||'astar';
+            document.querySelectorAll('.algo-btn').forEach(b=>b.classList.toggle('active',b.dataset.algo===currentAlgo));
+            addAIMsg('bot',`✅ ${p.explain||''}\nRouting ${sc.name} → ${dc.name} with ${currentAlgo}…`);
+            switchTab('dir'); setTimeout(runRoute, 300);
+          } else { addAIMsg('bot',`⚠️ Could not find "${p.src}" or "${p.dst}" in dataset.`); }
+        } else { addAIMsg('bot', p.explain||reply); }
+      } catch(e) { addAIMsg('bot', reply); }
+    }
+
+    async function aiNarrate() {
+      if (!lastResult) { addAIMsg('bot','⚠️ Find a route first.'); switchTab('ai'); return; }
+      switchTab('ai');
+      const r = lastResult;
+      const cities = r.path.map(id=>CITIES[id].name);
+      addAIMsg('user',`Narrate: ${CITIES[r.path[0]].name} → ${CITIES[r.path[r.path.length-1]].name}`);
+      const thinking = addAIMsg('thinking','✍️ Writing…');
+      const reply = await callClaude(
+        `Narrate this Indian road trip in 3-4 engaging sentences. Mention geography and interesting facts.\nRoute: ${cities.join(' → ')}\nDistance: ${Math.round(r.dist)} km, ${r.path.length} cities.`,
+        'You are an enthusiastic Indian travel writer. Be specific and vivid.'
+      );
+      thinking.remove(); if (reply) addAIMsg('bot', reply);
+    }
+
+    async function aiExplainBench() {
+      const rows = document.querySelectorAll('#bench-rows .bench-row');
+      if (!rows.length) { addAIMsg('bot','⚠️ Run a benchmark first.'); switchTab('ai'); return; }
+      switchTab('ai');
+      const data = []; rows.forEach(row => {
+        const algo = row.querySelector('.bench-algo').childNodes[0].textContent.trim().replace('  🏆','');
+        const stats = row.querySelectorAll('.bench-stat');
+        data.push(`${algo}: ${stats[0].childNodes[0].textContent} nodes`);
+      });
+      addAIMsg('user','Explain why Bi-A★ explored the fewest nodes');
+      const thinking = addAIMsg('thinking','🧠 Analysing…');
+      const reply = await callClaude(
+        `Benchmark: ${document.getElementById('bench-sub').textContent}\n${data.join('\n')}\nExplain in 3-4 sentences why Bi-A★ explored fewest nodes. Be technical, cite numbers.`,
+        'You are a CS educator specialising in graph algorithms.'
+      );
+      thinking.remove(); if (reply) addAIMsg('bot', reply);
+    }
+
+    async function aiCityFacts() {
+      switchTab('ai');
+      const cityName = prompt('Enter a city name:');
+      if (!cityName) return;
+      addAIMsg('user',`Facts about ${cityName}`);
+      const thinking = addAIMsg('thinking','🔍 Researching…');
+      const reply = await callClaude(`Give 3 interesting facts about ${cityName}, India — geography, history, or culture. Keep each to 1-2 sentences.`,'You are a knowledgeable guide to India.');
+      thinking.remove(); if (reply) addAIMsg('bot', reply);
+    }
+
+    async function aiTripIdea() {
+      switchTab('ai');
+      addAIMsg('user','Suggest an Indian road trip');
+      const thinking = addAIMsg('thinking','🗺 Planning…');
+      const reply = await callClaude(`Suggest one interesting Indian road trip (4-6 cities). Format:\n🚗 Trip name\nCities: City1 → City2 → ... → City1\nWhy: one compelling sentence.`,'You are an Indian travel expert who loves road trips.');
+      thinking.remove();
+      if (reply) {
+        addAIMsg('bot', reply);
+        const m = reply.match(/Cities:\s*(.+)/);
+        if (m) {
+          const names = m[1].split('→').map(s=>s.trim().replace(/[^a-zA-Z\s]/g,'').trim());
+          const found = names.map(n=>CITIES.find(c=>c.name.toLowerCase()===n.toLowerCase())).filter(Boolean);
+          if (found.length >= 2) { tripIds=found.map(c=>c.id); renderTripList(); switchTab('trip'); }
+        }
+      }
+    }
+
+    // Enable AI buttons after results
+    document.getElementById('findBtn').addEventListener('click', () => {
+      setTimeout(() => { if (lastResult) { document.getElementById('aiNarrateBtn').disabled=false; document.getElementById('shareRow').style.display='block'; } }, 600);
+    });
+    document.getElementById('benchBtn').addEventListener('click', () => {
+      setTimeout(() => { document.getElementById('aiExplainBtn').disabled=false; }, 2500);
+    });
+
   </script>
 </body>
 
