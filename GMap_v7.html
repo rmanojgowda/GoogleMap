@@ -1785,7 +1785,7 @@
             </div>
             <div class="tr-body">
               <div class="tr-steps" id="tr-steps"></div>
-              <div class="algo-note">🧠 Nearest-Neighbour + 2-opt local search</div>
+              <div class="algo-note">🧠 Nearest-Neighbour + 3-opt optimisation</div>
             </div>
           </div>
         </div>
@@ -2811,6 +2811,7 @@
         el.appendChild(d);
       });
     }
+    document.let tripMode = 'opt'; // declared before planBtn
     document.getElementById('planBtn').addEventListener('click', () => {
       if (tripIds.length < 2) { showErr('trip-err', 'Add at least 2 cities.'); return; }
       document.getElementById('spinner').classList.add('show');
@@ -3200,7 +3201,6 @@
     }
 
     // ── Trip mode ─────────────────────────────────────────────────
-    let tripMode = 'opt';
     function setTripMode(mode) {
       tripMode = mode;
       document.getElementById('modeOptBtn').classList.toggle('active', mode==='opt');
